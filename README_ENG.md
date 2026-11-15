@@ -61,6 +61,8 @@ Example specification:
 
 Supported fields are `profile`, `abstract`, `keywords`, `introduction`, `chapters`, `conclusion`, `sources`, and `appendices`.
 
+A complete reproducible example is available in [`examples/`](examples/). It runs one JSON specification through generation, copy formatting, and audit.
+
 ## Behavior and safety
 
 The default baseline is GOST 7.32-2017 with bibliographic descriptions from GOST R 7.0.100-2018. User-provided guidelines can extend or override profile-specific structure. Conflicts are shown to the user instead of being resolved silently.
@@ -79,8 +81,25 @@ scripts/apply_gost.py            Formatting of a DOCX copy
 scripts/build_gost.js            New DOCX generator
 tests/                            Regression tests and fixtures
 .github/workflows/validate.yml   CI validation workflow
+examples/                        Reproducible end-to-end example
+docs/architecture.md             Data-flow architecture diagram
+CHANGELOG.md                     Change history
+SECURITY.md                      Security policy
+LICENSE                          MIT License
 README.md                        Russian documentation
 ```
+
+## Supported checks
+
+| Area | Status |
+| --- | --- |
+| A4/A3 page size and margins | ✅ |
+| Fonts, size, indents, and spacing | ✅ |
+| Footer and page numbering | ✅ |
+| Headings, captions, and list markers | ✅ |
+| Citation order | ✅ |
+| Document structure and appendices | ✅ |
+| Formulas and rendered visual layout | manual review |
 
 ## Validation
 
