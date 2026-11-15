@@ -8,7 +8,9 @@ works from a cloned repository and from an installed agent skill directory.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -33,6 +35,19 @@ def run_build(args: list[str]) -> int:
     ).returncode
 
 
+def doctor() -> int:
+    """Report whether optional runtime dependencies are available."""
+    checks = {
+        "python": True,
+        "lxml": importlib.util.find_spec("lxml") is not None,
+        "node": shutil.which("node") is not None,
+        "docx": (ROOT / "node_modules" / "docx").is_dir(),
+    }
+    for name, available in checks.items():
+        print(f"{'OK' if available else 'MISSING':7} {name}")
+    return 0 if all(checks.values()) else 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Portable command runner for the gost-docx skill."
@@ -49,12 +64,15 @@ def main() -> int:
 
     build = subparsers.add_parser("build", help="Build a DOCX from a JSON task")
     build.add_argument("args", nargs=argparse.REMAINDER)
+    subparsers.add_parser("doctor", help="Check the local runtime environment")
 
     parsed = parser.parse_args()
     if parsed.command == "audit":
         return run_python("audit_docx.py", parsed.args)
     if parsed.command == "format":
         return run_python("apply_gost.py", parsed.args)
+    if parsed.command == "doctor":
+        return doctor()
     return run_build(parsed.args)
 
 

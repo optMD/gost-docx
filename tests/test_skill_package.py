@@ -43,6 +43,7 @@ class SkillPackageTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("audit", result.stdout)
         self.assertIn("build", result.stdout)
+        self.assertIn("doctor", result.stdout)
 
 
 if __name__ == "__main__":
