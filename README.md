@@ -37,11 +37,37 @@ JSON-спецификация ──▶ новый DOCX ──▶ формати
 
 ## Установка skill
 
-Для установки через open agent skills CLI:
+### Codex, Claude Code и другие агенты
+
+Установка во все обнаруженные агенты глобально:
 
 ```bash
-npx skills add https://github.com/optMD/gost-docx
+npx skills add https://github.com/optMD/gost-docx \
+  --skill gost-docx \
+  --agent '*' \
+  --global \
+  --yes
 ```
+
+Только в Codex и Claude Code:
+
+```bash
+npx skills add https://github.com/optMD/gost-docx \
+  --skill gost-docx \
+  --agent codex \
+  --agent claude-code \
+  --global \
+  --yes
+```
+
+Проверить установку и обновить skill:
+
+```bash
+npx skills list
+npx skills update
+```
+
+Для установки только в текущий проект убери флаг `--global`. Подробности, включая пути для разных агентов и ручную загрузку в Claude.ai, описаны в [docs/installation.md](docs/installation.md).
 
 Для локальной разработки клонируй репозиторий и установи Node-зависимости:
 
@@ -162,6 +188,7 @@ scripts/build_gost.js            генерация нового DOCX
 examples/                         воспроизводимый end-to-end пример
 tests/                            регрессионные тесты и фикстуры
 docs/architecture.md              схема потоков данных
+docs/installation.md              установка в AI-агенты
 .github/workflows/validate.yml   обязательная CI-проверка
 ```
 
