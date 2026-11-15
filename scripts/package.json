@@ -1,14 +1,14 @@
 {
   "name": "scripts",
   "version": "1.0.0",
-  "description": "",
+  "description": "Local Node.js dependency for generating GOST-formatted DOCX documents",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": [],
+  "keywords": ["docx", "gost", "document-generation", "word"],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "docx": "9.15.3"
   }

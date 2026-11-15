@@ -1,0 +1,42 @@
+# Публичный пример
+
+Этот пример показывает полный цикл работы трёх основных скриптов `gost-docx` на русскоязычной спецификации:
+
+1. `scripts/build_gost.js` создаёт новый DOCX из JSON.
+2. `scripts/apply_gost.py` форматирует копию документа по правилам проекта.
+3. `scripts/audit_docx.py` проверяет итоговый DOCX без изменения исходного файла.
+
+## Запуск
+
+Команды выполняются из корня репозитория. Нужны Python 3, Node.js и npm.
+
+```bash
+npm ci --prefix scripts
+
+OUT_DIR="$(mktemp -d)"
+
+NODE_PATH=scripts/node_modules \
+  node scripts/build_gost.js \
+  examples/task-report.json \
+  "$OUT_DIR/task-report.docx"
+
+python3 scripts/apply_gost.py \
+  "$OUT_DIR/task-report.docx" \
+  --out "$OUT_DIR/task-report_gost.docx"
+
+python3 scripts/audit_docx.py \
+  "$OUT_DIR/task-report_gost.docx" \
+  --out "$OUT_DIR/audit.md"
+
+printf 'Результаты сохранены в: %s\n' "$OUT_DIR"
+```
+
+Ожидаемый результат последней команды — сообщение `Нарушений по проверенным правилам не найдено.` и код возврата `0`. В отчёте `audit.md` могут оставаться предупреждения о свойствах, которые требуют визуальной проверки; это не считается ошибкой аудита.
+
+## Что изменять в JSON
+
+Файл [`task-report.json`](task-report.json) — рабочая спецификация примера. В ней показаны поля `profile`, `abstract`, `introduction`, `chapters`, `conclusion`, `sources` и `appendices`.
+
+Текст и библиографические записи в примере демонстрационные. Заменяйте их собственным содержанием и проверяйте библиографию перед использованием документа. Скрипты не придумывают содержание, персональные данные или результаты исследования.
+
+`apply_gost.py` не перезаписывает исходный DOCX: результат явно записывается в файл с суффиксом `_gost`. `audit_docx.py` также работает в режиме только чтения и может сохранить Markdown-отчёт через `--out`.
