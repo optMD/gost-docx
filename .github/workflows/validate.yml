@@ -46,7 +46,6 @@ jobs:
         run: |
           test -f SKILL.md
           test -f references/gost-rules.md
-          test -f references/niaspo-structure.md
           test -f scripts/audit_docx.py
           test -f scripts/apply_gost.py
           test -f scripts/build_gost.js
