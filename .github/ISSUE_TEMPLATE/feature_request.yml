@@ -1,0 +1,27 @@
+name: Feature request
+description: Propose a new document profile, rule, or workflow improvement
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: Need
+      description: Explain the user problem and the desired result.
+    validations:
+      required: true
+  - type: textarea
+    id: rules
+    attributes:
+      label: Source rules
+      description: Link or quote the relevant standard or institutional guideline.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Describe how the result can be verified.
+    validations:
+      required: true
