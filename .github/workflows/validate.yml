@@ -1,0 +1,64 @@
+name: Validate skill
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: scripts/package-lock.json
+
+      - name: Install Python dependencies
+        run: python -m pip install lxml
+
+      - name: Install Node dependencies
+        run: npm ci --prefix scripts
+
+      - name: Compile Python sources
+        run: python -m compileall -q scripts
+
+      - name: Check JavaScript syntax
+        run: node --check scripts/build_gost.js
+
+      - name: Run regression tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Check required skill files
+        run: |
+          test -f SKILL.md
+          test -f references/gost-rules.md
+          test -f references/niaspo-structure.md
+          test -f scripts/audit_docx.py
+          test -f scripts/apply_gost.py
+          test -f scripts/build_gost.js
+
+      - name: Validate skill frontmatter
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          text = Path("SKILL.md").read_text(encoding="utf-8")
+          assert text.startswith("---\n"), "SKILL.md must start with YAML frontmatter"
+          header = text.split("---\n", 2)[1]
+          assert "name: gost-docx" in header
+          assert "description:" in header
+          PY
