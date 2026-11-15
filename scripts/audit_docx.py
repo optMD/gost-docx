@@ -16,6 +16,7 @@ R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 NS = {"w": W}
 
 A4 = (11906, 16838)
+A3 = (16838, 23811)
 MARGINS = {"left": 1701, "right": 851, "top": 1134, "bottom": 1134}
 MARGIN_TOL = 30
 FIRST_INDENT = 709
@@ -106,11 +107,19 @@ class Audit:
                 self.add("ошибка", where, "нет размера страницы")
             else:
                 w, h = int(pg.get(q("w"))), int(pg.get(q("h")))
-                if abs(w - A4[0]) > 30 or abs(h - A4[1]) > 30:
-                    self.add("ошибка", where, f"формат {w}×{h} twips, нужен A4 (11906×16838; ГОСТ 7.32, 6.1.1)")
+                dims = (w, h)
+                if all(abs(a - b) <= 30 for a, b in zip(dims, A4)):
+                    pass
+                elif all(abs(a - b) <= 30 for a, b in zip(dims, A3)) or all(
+                    abs(a - b) <= 30 for a, b in zip(dims, (A3[1], A3[0]))
+                ):
+                    self.add("предупреждение", where,
+                             "используется формат A3; проверьте, что он нужен для большого количества таблиц/иллюстраций или приложения (ГОСТ 7.32, 6.1.1, 6.17.5)")
+                else:
+                    self.add("ошибка", where, f"формат {w}×{h} twips, нужен A4 или допустимый A3 (ГОСТ 7.32, 6.1.1)")
                 orient = pg.get(q("orient"))
                 if orient == "landscape":
-                    self.add("предупреждение", where, "альбомная ориентация — допустимо только для приложений (ГОСТ 7.32, 6.17.5)")
+                    self.add("предупреждение", where, "альбомная ориентация; проверьте, что она нужна для таблиц/иллюстраций или приложения (ГОСТ 7.32, 6.1.1, 6.17.5)")
             mar = s.find(q("pgMar"))
             if mar is None:
                 self.add("ошибка", where, "нет полей страницы")
@@ -120,6 +129,32 @@ class Audit:
                     if abs(got - want) > MARGIN_TOL:
                         self.add("ошибка", where, f"поле {side}: {got / 56.69:.1f} мм, нужно {want / 56.69:.1f} мм (30/15/20/20 мм)")
             self.check_footer(s, where)
+            self.check_first_page_footer(s, where)
+
+    def _footer_has_page(self, footer):
+        return bool(footer is not None and (
+            any("PAGE" in (t.text or "") for t in footer.iter(q("instrText")))
+            or any("PAGE" in (f.get(q("instr")) or "") for f in footer.iter(q("fldSimple")))
+        ))
+
+    def check_first_page_footer(self, sect, where):
+        """Check that the counted title page has no visible page number."""
+        title_pg = sect.find(q("titlePg")) is not None
+        first_refs = [r for r in sect.findall(q("footerReference")) if r.get(q("type")) == "first"]
+        if not title_pg:
+            self.add("предупреждение", where,
+                     "не задан отдельный режим первой страницы; отсутствие номера на титуле нельзя подтвердить автоматически (ГОСТ 7.32, 6.3.2)")
+            return
+        if not first_refs:
+            self.add("предупреждение", where,
+                     "для первой страницы нет отдельного колонтитула; проверьте, что номер на титуле скрыт визуально (ГОСТ 7.32, 6.3.2)")
+            return
+        target = self.rels.get(first_refs[0].get(f"{{{R}}}id"))
+        footer = self._xml("word/" + target) if target else None
+        if footer is None:
+            self.add("ошибка", where, "колонтитул первой страницы указан, но файл не найден")
+        elif self._footer_has_page(footer):
+            self.add("ошибка", where, "на первой странице найдено поле PAGE; номер титульного листа должен быть скрыт (ГОСТ 7.32, 6.3.2)")
 
     def check_footer(self, sect, where):
         refs = [r for r in sect.findall(q("footerReference")) if r.get(q("type")) in (None, "default")]
@@ -157,9 +192,16 @@ class Audit:
         return ppr, pstyle, text
 
     def is_body(self, ppr, pstyle, text):
-        if len(text.strip()) < 40 or pstyle.lower().startswith(("heading", "title", "toc", "caption")):
+        stripped = text.strip()
+        if not stripped or pstyle.lower().startswith(("heading", "title", "toc", "caption")):
             return False
-        if CAPTION_START.match(text) or text.startswith("Примечание"):
+        if CAPTION_START.match(stripped) or stripped.startswith("Примечание"):
+            return False
+        if stripped.upper() in {
+            "ТИТУЛЬНЫЙ ЛИСТ", "РЕФЕРАТ", "СОДЕРЖАНИЕ", "ВВЕДЕНИЕ", "ЗАКЛЮЧЕНИЕ",
+            "ТЕРМИНЫ И ОПРЕДЕЛЕНИЯ", "ПЕРЕЧЕНЬ СОКРАЩЕНИЙ И ОБОЗНАЧЕНИЙ",
+            "СПИСОК ИСПОЛЬЗОВАННЫХ ИСТОЧНИКОВ", "ПРИЛОЖЕНИЕ",
+        }:
             return False
         jc = self.first([ppr, self.style_child(pstyle, "pPr"), self.style_child("Normal", "pPr")], "jc", "val")
         return jc not in ("center", "right")
@@ -233,6 +275,46 @@ class Audit:
             if re.match(r"^\d+(\.\d+)*\s+\S", t) and len(t) < 120 and t.endswith("."):
                 self.add("предупреждение", f"абз.{idx}", f"заголовок «{t[:60]}» заканчивается точкой (ГОСТ 7.32, 6.2.3)")
 
+    def check_main_section_breaks(self):
+        """Main sections must start on a new page (ГОСТ 7.32, 6.2.1)."""
+        for idx, p in self.body_paragraphs():
+            ppr, _, text = self.paragraph_info(p)
+            title = text.strip()
+            if not re.match(r"^\d+\s+\S", title):
+                continue
+            if ppr is None or ppr.find(q("pageBreakBefore")) is None:
+                self.add("ошибка", f"абз.{idx}",
+                         f"раздел «{title[:70]}» не начинается с новой страницы (ГОСТ 7.32, 6.2.1)")
+
+    def check_structural_elements(self):
+        """Check common report elements without rejecting specialized profiles."""
+        texts = [self.paragraph_info(p)[2].strip().upper() for _, p in self.body_paragraphs()]
+        if "ТИТУЛЬНЫЙ ЛИСТ" not in texts:
+            self.add("предупреждение", "структура", "не найдена титульная страница-заглушка; для существующего персонального титула проверьте документ визуально")
+        if "ВВЕДЕНИЕ" in texts and "ЗАКЛЮЧЕНИЕ" not in texts:
+            self.add("ошибка", "структура", "есть «ВВЕДЕНИЕ», но отсутствует «ЗАКЛЮЧЕНИЕ»")
+        if "ЗАКЛЮЧЕНИЕ" in texts and not any("ИСТОЧНИК" in t for t in texts):
+            self.add("предупреждение", "структура", "есть «ЗАКЛЮЧЕНИЕ», но не найден список использованных источников")
+
+    def check_abbreviations_threshold(self):
+        """The separate list is required only for more than three symbols."""
+        heading = "ПЕРЕЧЕНЬ СОКРАЩЕНИЙ И ОБОЗНАЧЕНИЙ"
+        paragraphs = list(self.body_paragraphs())
+        for pos, (idx, p) in enumerate(paragraphs):
+            if self.paragraph_info(p)[2].strip().upper() != heading:
+                continue
+            entries = 0
+            for _, next_p in paragraphs[pos + 1:]:
+                value = self.paragraph_info(next_p)[2].strip()
+                if not value:
+                    continue
+                if value.upper() in {"ВВЕДЕНИЕ", "ЗАКЛЮЧЕНИЕ", "СОДЕРЖАНИЕ", "СПИСОК ИСПОЛЬЗОВАННЫХ ИСТОЧНИКОВ"} or re.match(r"^\d+\s+", value):
+                    break
+                entries += 1
+            if 1 <= entries <= 3:
+                self.add("предупреждение", f"абз.{idx}",
+                         f"перечень содержит {entries} обозначений; отдельный перечень обязателен только при количестве более трёх (ГОСТ 7.32, 5.6.2–5.6.3)")
+
     def check_captions(self):
         for idx, p in self.body_paragraphs():
             _, _, text = self.paragraph_info(p)
@@ -278,6 +360,9 @@ class Audit:
         self.check_body_format()
         self.check_fonts()
         self.check_headings()
+        self.check_main_section_breaks()
+        self.check_structural_elements()
+        self.check_abbreviations_threshold()
         self.check_captions()
         self.check_citations()
         self.check_pronouns()
