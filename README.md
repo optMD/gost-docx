@@ -90,7 +90,7 @@ npm ci --prefix scripts
 ### 1. Проверить существующий документ
 
 ```bash
-python3 scripts/audit_docx.py report.docx --out audit.md
+python3 scripts/gost_docx.py audit report.docx --out audit.md
 ```
 
 Аудит только читает исходный файл. Коды возврата:
@@ -104,7 +104,7 @@ python3 scripts/audit_docx.py report.docx --out audit.md
 ### 2. Отформатировать копию
 
 ```bash
-python3 scripts/apply_gost.py report.docx
+python3 scripts/gost_docx.py format report.docx
 ```
 
 Результат появится рядом с исходным файлом как `report_gost.docx`. Оригинал не перезаписывается.
@@ -112,8 +112,7 @@ python3 scripts/apply_gost.py report.docx
 ### 3. Создать документ из JSON
 
 ```bash
-NODE_PATH=scripts/node_modules \
-  node scripts/build_gost.js task.json report.docx
+python3 scripts/gost_docx.py build task.json report.docx
 ```
 
 Минимальная спецификация:

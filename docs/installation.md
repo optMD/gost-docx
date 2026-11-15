@@ -67,6 +67,32 @@ npx skills update
 
 Для проектной установки CLI создаёт агентский каталог внутри текущего проекта. Это удобно, если skill должен быть частью reproducible development environment.
 
+## Runtime-инструменты
+
+`npx skills add` устанавливает инструкции и файлы скилла, но не устанавливает
+системные Python- и Node-зависимости. Для аудита и форматирования из клона
+репозитория выполните:
+
+```bash
+python3 -m pip install lxml
+npm ci --prefix scripts
+```
+
+Единая точка входа для всех режимов:
+
+```bash
+python3 scripts/gost_docx.py audit input.docx --out audit.md
+python3 scripts/gost_docx.py format input.docx
+python3 scripts/gost_docx.py build examples/task-report.json output.docx
+```
+
+Команды разрешают пути к скриптам и Node-модулям относительно каталога
+скилла, поэтому не зависят от `~/.claude`, `~/.agents` или рабочего каталога.
+После глобальной установки скопируйте репозиторий в доступный для runtime
+каталог либо запускайте команды из clone-проекта, где можно установить
+зависимости. Для агентов, которые используют только инструкции, установка
+через `npx skills` уже достаточна.
+
 ## Claude.ai и Claude Code
 
 Claude Code использует CLI-установку, описанную выше. Claude.ai использует отдельный интерфейс загрузки custom skills: при ручной загрузке архив должен содержать каталог skill, внутри которого находится `SKILL.md`.
@@ -77,6 +103,7 @@ Claude Code использует CLI-установку, описанную вы
 gost-docx/
 ├── SKILL.md
 ├── scripts/
+│   └── gost_docx.py       # portable CLI
 ├── references/
 └── README.md
 ```
