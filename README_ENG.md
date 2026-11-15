@@ -19,6 +19,38 @@ Reusable skill for creating, auditing, and formatting Word documents (`.docx`) a
 - chapters, subsections, sources, and appendices;
 - links from in-text citations to bibliography entries.
 
+## Installation for AI agents
+
+Install globally for all detected agents:
+
+```bash
+npx skills add https://github.com/optMD/gost-docx \
+  --skill gost-docx \
+  --agent '*' \
+  --global \
+  --yes
+```
+
+Install only for Codex and Claude Code:
+
+```bash
+npx skills add https://github.com/optMD/gost-docx \
+  --skill gost-docx \
+  --agent codex \
+  --agent claude-code \
+  --global \
+  --yes
+```
+
+Verify and update:
+
+```bash
+npx skills list
+npx skills update
+```
+
+See [docs/installation.md](docs/installation.md) for project-local installation, agent paths, and Claude.ai upload notes.
+
 ## Quick start
 
 ### Audit
@@ -83,6 +115,7 @@ tests/                            Regression tests and fixtures
 .github/workflows/validate.yml   CI validation workflow
 examples/                        Reproducible end-to-end example
 docs/architecture.md             Data-flow architecture diagram
+docs/installation.md             Installation for AI agents
 CHANGELOG.md                     Change history
 SECURITY.md                      Security policy
 LICENSE                          MIT License
