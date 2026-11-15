@@ -84,7 +84,11 @@ npm ci --prefix scripts
 python3 scripts/gost_docx.py audit input.docx --out audit.md
 python3 scripts/gost_docx.py format input.docx
 python3 scripts/gost_docx.py build examples/task-report.json output.docx
+python3 scripts/gost_docx.py doctor
 ```
+
+`doctor` показывает состояние Python, `lxml`, Node.js и локального пакета
+`docx`. Код возврата `0` означает, что окружение готово ко всем режимам.
 
 Команды разрешают пути к скриптам и Node-модулям относительно каталога
 скилла, поэтому не зависят от `~/.claude`, `~/.agents` или рабочего каталога.
