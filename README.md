@@ -2,6 +2,10 @@
 
 **Проверяй. Форматируй. Собирай DOCX по ГОСТ.**
 
+<p align="center">
+  <img src="docs/assets/readme-hero.jpg" alt="Документ DOCX с разметкой полей и инструментами измерения" width="920">
+</p>
+
 [![CI](https://github.com/optMD/gost-docx/actions/workflows/validate.yml/badge.svg)](https://github.com/optMD/gost-docx/actions/workflows/validate.yml)
 [![Release](https://img.shields.io/github/v/release/optMD/gost-docx?display_name=tag)](https://github.com/optMD/gost-docx/releases)
 [![License](https://img.shields.io/github/license/optMD/gost-docx)](LICENSE)
@@ -11,6 +15,9 @@
 [Установка](#установка-skill) · [Быстрый старт](#быстрый-старт) · [Примеры](examples/) · [Архитектура](docs/architecture.md) · [Разработка](#разработка-и-релизы)
 
 `gost-docx` — переиспользуемый Agent Skill и набор локальных инструментов для работы с Word-документами (`.docx`) по ГОСТ 7.32-2017, ГОСТ Р 7.0.100-2018 и предоставленным пользователем методичкам.
+
+> Локальный Agent Skill для Codex, Claude Code и других совместимых агентов.
+> Один репозиторий — аудит, форматирование и генерация Word-документов.
 
 ![gost-docx — генерация, форматирование и аудит DOCX](docs/assets/social-preview.jpg)
 
@@ -40,6 +47,18 @@ JSON-спецификация ──▶ новый DOCX ──▶ формати
 | Ссылки | Проверка порядка ссылок и связывание с библиографией |
 
 Проверяются формат страницы, поля, шрифт, размер, интервалы, абзацы, колонтитулы, нумерация, заголовки, подписи, маркеры списков, ссылки и структура документа.
+
+## Как это работает
+
+```mermaid
+flowchart LR
+    A[DOCX или JSON] --> B{gost-docx}
+    B --> C[Аудит]
+    B --> D[Форматирование копии]
+    B --> E[Новый DOCX]
+    C --> F[Markdown-отчёт]
+    D --> G[*_gost.docx]
+```
 
 ## Установка skill
 
