@@ -1,0 +1,327 @@
+#!/usr/bin/env python3
+"""Аудит .docx по правилам ГОСТ 7.32 и методички РТУ МИРЭА. Только чтение.
+
+Использование: python audit_docx.py файл.docx [--out отчёт.md]
+Код возврата: 0 — нарушений нет, 1 — есть ошибки, 2 — файл не открыт.
+"""
+import argparse
+import re
+import sys
+import zipfile
+
+from lxml import etree
+
+W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+NS = {"w": W}
+
+A4 = (11906, 16838)
+MARGINS = {"left": 1701, "right": 851, "top": 1134, "bottom": 1134}
+MARGIN_TOL = 30
+FIRST_INDENT = 709
+FIRST_INDENT_TOL = 40
+FONT = "Times New Roman"
+SIZE_HALFPT = 28
+LINE_15 = 360
+
+PRONOUNS = re.compile(r"(?<![\wё])(я|мы|мне|меня|нам|нас|наш|наша|наше|наши|нами|мной)(?![\wё])", re.I)
+CAPTION = re.compile(r"^(Рисунок|Таблица)\s+[А-ЯA-Z]?\.?\d+(\.\d+)?\s*[-–—]\s+\S")
+CAPTION_START = re.compile(r"^(Рисунок|Таблица)\s")
+
+
+def q(tag):
+    return "{%s}%s" % (W, tag)
+
+
+def default_para_style_id(styles):
+    if styles is None:
+        return None
+    for st in styles.findall("w:style", NS):
+        if st.get(q("type")) == "paragraph" and st.get(q("default")) in ("1", "true"):
+            return st.get(q("styleId"))
+    return None
+
+
+class Audit:
+    def __init__(self, path):
+        self.path = path
+        try:
+            self.z = zipfile.ZipFile(path)
+            self.doc = etree.fromstring(self.z.read("word/document.xml"))
+        except (OSError, zipfile.BadZipFile, KeyError, etree.XMLSyntaxError) as e:
+            raise SystemExit(f"Не удалось открыть docx: {e}")
+        self.styles = self._xml("word/styles.xml")
+        self.rels = self._rels()
+        self.findings = []  # (уровень, место, текст)
+
+    def _xml(self, name):
+        return etree.fromstring(self.z.read(name)) if name in self.z.namelist() else None
+
+    def _rels(self):
+        rels = self._xml("word/_rels/document.xml.rels")
+        if rels is None:
+            return {}
+        return {r.get("Id"): r.get("Target") for r in rels}
+
+    def add(self, level, where, msg):
+        self.findings.append((level, where, msg))
+
+    # ---- эффективные свойства: прямые → стиль абзаца → Normal → docDefaults ----
+
+    def style_child(self, sid, child):
+        if self.styles is None or sid is None:
+            return None
+        if sid == "Normal":
+            sid = default_para_style_id(self.styles)
+        st = self.styles.find(f"w:style[@w:styleId='{sid}']", NS)
+        return st.find(q(child)) if st is not None else None
+
+    def chain(self, direct, pstyle, child):
+        defaults = None
+        if self.styles is not None:
+            defaults = self.styles.find(f"w:docDefaults/w:{'pPrDefault' if child == 'pPr' else 'rPrDefault'}/w:{child}", NS)
+        return [direct, self.style_child(pstyle, child), self.style_child("Normal", child), defaults]
+
+    @staticmethod
+    def first(chain, tag, attr):
+        for c in chain:
+            if c is None:
+                continue
+            e = c.find(q(tag))
+            if e is not None and e.get(q(attr)) is not None:
+                return e.get(q(attr))
+        return None
+
+    # ---- проверки ----
+
+    def check_sections(self):
+        sects = list(self.doc.iter(q("sectPr")))
+        if not sects:
+            self.add("ошибка", "документ", "нет ни одного sectPr (нет настроек страницы)")
+            return
+        for i, s in enumerate(sects, 1):
+            where = f"раздел {i}"
+            pg = s.find(q("pgSz"))
+            if pg is None:
+                self.add("ошибка", where, "нет размера страницы")
+            else:
+                w, h = int(pg.get(q("w"))), int(pg.get(q("h")))
+                if abs(w - A4[0]) > 30 or abs(h - A4[1]) > 30:
+                    self.add("ошибка", where, f"формат {w}×{h} twips, нужен A4 (11906×16838; ГОСТ 7.32, 6.1.1)")
+                orient = pg.get(q("orient"))
+                if orient == "landscape":
+                    self.add("предупреждение", where, "альбомная ориентация — допустимо только для приложений (ГОСТ 7.32, 6.17.5)")
+            mar = s.find(q("pgMar"))
+            if mar is None:
+                self.add("ошибка", where, "нет полей страницы")
+            else:
+                for side, want in MARGINS.items():
+                    got = int(mar.get(q(side), "0"))
+                    if abs(got - want) > MARGIN_TOL:
+                        self.add("ошибка", where, f"поле {side}: {got / 56.69:.1f} мм, нужно {want / 56.69:.1f} мм (30/15/20/20 мм)")
+            self.check_footer(s, where)
+
+    def check_footer(self, sect, where):
+        refs = [r for r in sect.findall(q("footerReference")) if r.get(q("type")) in (None, "default")]
+        if not refs:
+            self.add("ошибка", where, "нет нижнего колонтитула с номером страницы (ГОСТ 7.32, 6.3.1)")
+            return
+        target = self.rels.get(refs[0].get(f"{{{R}}}id"))
+        footer = self._xml("word/" + target) if target else None
+        if footer is None:
+            self.add("ошибка", where, "колонтитул указан, но файл не найден")
+            return
+        has_page = any("PAGE" in (t.text or "") for t in footer.iter(q("instrText"))) or any(
+            "PAGE" in (f.get(q("instr")) or "") for f in footer.iter(q("fldSimple"))
+        )
+        if not has_page:
+            self.add("ошибка", where, "в колонтитуле нет поля PAGE — номер страницы не выводится")
+        centered = any(
+            (p.find("w:pPr/w:jc", NS) is not None and p.find("w:pPr/w:jc", NS).get(q("val")) == "center")
+            for p in footer.iter(q("p"))
+        )
+        if not centered:
+            self.add("ошибка", where, "номер страницы не по центру (ГОСТ 7.32, 6.3.1)")
+
+    def body_paragraphs(self):
+        for idx, p in enumerate(self.doc.iter(q("p"))):
+            if any(a.tag == q("tbl") for a in p.iterancestors()):
+                continue
+            yield idx, p
+
+    def paragraph_info(self, p):
+        ppr = p.find(q("pPr"))
+        pstyle_el = ppr.find(q("pStyle")) if ppr is not None else None
+        pstyle = pstyle_el.get(q("val")) if pstyle_el is not None else "Normal"
+        text = "".join(t.text or "" for t in p.iter(q("t")))
+        return ppr, pstyle, text
+
+    def is_body(self, ppr, pstyle, text):
+        if len(text.strip()) < 40 or pstyle.lower().startswith(("heading", "title", "toc", "caption")):
+            return False
+        if CAPTION_START.match(text) or text.startswith("Примечание"):
+            return False
+        jc = self.first([ppr, self.style_child(pstyle, "pPr"), self.style_child("Normal", "pPr")], "jc", "val")
+        return jc not in ("center", "right")
+
+    def check_body_format(self):
+        bad_indent, bad_line, bad_space, bad_jc = [], [], [], []
+        for idx, p in self.body_paragraphs():
+            ppr, pstyle, text = self.paragraph_info(p)
+            if not self.is_body(ppr, pstyle, text):
+                continue
+            pc = [ppr, self.style_child(pstyle, "pPr"), self.style_child("Normal", "pPr"), self.pdefault()]
+            ind = self.first(pc, "ind", "firstLine")
+            line = self.first(pc, "spacing", "line")
+            before = self.first(pc, "spacing", "before") or "0"
+            after = self.first(pc, "spacing", "after") or "0"
+            jc = self.first(pc, "jc", "val")
+            snippet = text.strip()[:50]
+            if ind is None or abs(int(ind) - FIRST_INDENT) > FIRST_INDENT_TOL:
+                bad_indent.append((idx, snippet, ind))
+            if line is None or abs(int(line) - LINE_15) > 5:
+                bad_line.append((idx, snippet, line))
+            if int(before) or int(after):
+                bad_space.append((idx, snippet, before, after))
+            if jc != "both":
+                bad_jc.append((idx, snippet, jc))
+        for label, items, fmt in [
+            ("абзацный отступ не 1,25 см (709 twips)", bad_indent, lambda x: f"отступ {x[2]}"),
+            ("межстрочный интервал не 1,5", bad_line, lambda x: f"интервал {x[2]}"),
+            ("есть интервалы до/после абзаца (должны быть 0)", bad_space, lambda x: f"до {x[2]} / после {x[3]}"),
+            ("выравнивание не «по ширине»", bad_jc, lambda x: f"jc={x[2]}"),
+        ]:
+            if items:
+                self.add("ошибка", f"основной текст, {len(items)} абз.", f"{label}; примеры: " + "; ".join(
+                    f"абз.{i[0]} «{i[1]}…» ({fmt(i)})" for i in items[:5]))
+
+    def pdefault(self):
+        if self.styles is None:
+            return None
+        return self.styles.find("w:docDefaults/w:pPrDefault/w:pPr", NS)
+
+    def check_fonts(self):
+        bad = []
+        for idx, p in self.body_paragraphs():
+            ppr, pstyle, text = self.paragraph_info(p)
+            if not self.is_body(ppr, pstyle, text):
+                continue
+            for r in p.iter(q("r")):
+                rt = "".join(t.text or "" for t in r.iter(q("t")))
+                if not rt.strip():
+                    continue
+                rpr = r.find(q("rPr"))
+                rc = [rpr, self.style_child(pstyle, "rPr"), self.style_child("Normal", "rPr"), self.rdefault()]
+                font = self.first(rc, "rFonts", "ascii")
+                size = self.first(rc, "sz", "val")
+                if font != FONT or size != str(SIZE_HALFPT):
+                    bad.append((idx, rt.strip()[:40], font, size))
+        if bad:
+            self.add("ошибка", f"основной текст, {len(bad)} фрагм.",
+                     "шрифт не Times New Roman 14 пт; примеры: " + "; ".join(
+                         f"абз.{b[0]} «{b[1]}» ({b[2] or '?'}, {int(b[3]) / 2 if b[3] else '?'} пт)" for b in bad[:5]))
+
+    def rdefault(self):
+        if self.styles is None:
+            return None
+        return self.styles.find("w:docDefaults/w:rPrDefault/w:rPr", NS)
+
+    def check_headings(self):
+        for idx, p in self.body_paragraphs():
+            _, _, text = self.paragraph_info(p)
+            t = text.strip()
+            if re.match(r"^\d+(\.\d+)*\s+\S", t) and len(t) < 120 and t.endswith("."):
+                self.add("предупреждение", f"абз.{idx}", f"заголовок «{t[:60]}» заканчивается точкой (ГОСТ 7.32, 6.2.3)")
+
+    def check_captions(self):
+        for idx, p in self.body_paragraphs():
+            _, _, text = self.paragraph_info(p)
+            t = text.strip()
+            if not CAPTION_START.match(t):
+                continue
+            if not CAPTION.match(t):
+                self.add("ошибка", f"абз.{idx}", f"подпись «{t[:60]}» не в формате «Рисунок N – Название» / «Таблица N – Название» (ГОСТ 7.32, 6.5.7, 6.6.3)")
+            elif t.endswith("."):
+                self.add("предупреждение", f"абз.{idx}", f"подпись «{t[:60]}» заканчивается точкой (ГОСТ 7.32, 6.5.8)")
+
+    def check_citations(self):
+        order = []
+        for idx, p in self.body_paragraphs():
+            _, _, text = self.paragraph_info(p)
+            for group in re.findall(r"\[(\d+(?:\s*[,;–—\-]\s*\d+)*)\]", text):
+                for n in re.findall(r"\d+", group):
+                    order.append((int(n), idx))
+        seen = []
+        for n, idx in order:
+            if n not in seen:
+                if n != (max(seen) + 1 if seen else 1):
+                    self.add("ошибка", f"абз.{idx}", f"ссылка [{n}] появляется раньше [{max(seen) + 1 if seen else 1}] — нарушен порядок ссылок (методичка, «Ссылки на источники»)")
+                seen.append(n)
+
+    def check_pronouns(self):
+        hits = []
+        for idx, p in self.body_paragraphs():
+            _, _, text = self.paragraph_info(p)
+            for m in PRONOUNS.finditer(text):
+                hits.append((idx, m.group(0), text[max(0, m.start() - 25):m.end() + 25]))
+        for idx, word, ctx in hits[:20]:
+            self.add("ошибка", f"абз.{idx}", f"местоимение «{word}» в тексте (задание, 3-е лицо): …{ctx}…")
+
+    def check_bullets(self):
+        for idx, p in self.body_paragraphs():
+            _, _, text = self.paragraph_info(p)
+            if "•" in text:
+                self.add("ошибка", f"абз.{idx}", "символ «•» как маркер списка (методичка: использовать тире)")
+
+    def run(self):
+        self.check_sections()
+        self.check_body_format()
+        self.check_fonts()
+        self.check_headings()
+        self.check_captions()
+        self.check_citations()
+        self.check_pronouns()
+        self.check_bullets()
+        return self.findings
+
+
+def render(path, findings):
+    lines = [f"# Аудит: {path}", ""]
+    errs = [f for f in findings if f[0] == "ошибка"]
+    warns = [f for f in findings if f[0] == "предупреждение"]
+    lines.append(f"Ошибок: {len(errs)}, предупреждений: {len(warns)}")
+    lines.append("")
+    if not findings:
+        lines.append("Нарушений по проверенным правилам не найдено.")
+    for level, title in (("ошибка", "Ошибки"), ("предупреждение", "Предупреждения")):
+        items = [f for f in findings if f[0] == level]
+        if items:
+            lines.append(f"## {title}")
+            lines.append("")
+            for _, where, msg in items:
+                lines.append(f"- **{where}** — {msg}")
+            lines.append("")
+    lines.append("Проверка охватывает поля, формат, колонтитул, шрифт, интервалы, отступ, выравнивание, подписи, ссылки, местоимения и маркеры. Не проверяются: содержание (TOC) по страницам, рисунки/таблицы в колонтитулах, нумерация разделов и формулы — их проверяют глазами после рендера.")
+    return "\n".join(lines) + "\n"
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("docx")
+    ap.add_argument("--out", help="сохранить отчёт в .md (оригинал не меняется)")
+    args = ap.parse_args()
+    try:
+        findings = Audit(args.docx).run()
+    except SystemExit as e:
+        print(e, file=sys.stderr)
+        return 2
+    report = render(args.docx, findings)
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as f:
+            f.write(report)
+    print(report)
+    return 1 if any(f[0] == "ошибка" for f in findings) else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
