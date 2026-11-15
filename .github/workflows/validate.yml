@@ -49,6 +49,10 @@ jobs:
           test -f scripts/audit_docx.py
           test -f scripts/apply_gost.py
           test -f scripts/build_gost.js
+          test -f scripts/gost_docx.py
+
+      - name: Validate portable skill package
+        run: python scripts/gost_docx.py --help
 
       - name: Validate skill frontmatter
         run: |
