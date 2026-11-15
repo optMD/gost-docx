@@ -1,10 +1,16 @@
 # gost-docx
 
 [![Validate skill](https://github.com/optMD/gost-docx/actions/workflows/validate.yml/badge.svg)](https://github.com/optMD/gost-docx/actions/workflows/validate.yml)
+[![Release](https://img.shields.io/github/v/release/optMD/gost-docx?display_name=tag)](https://github.com/optMD/gost-docx/releases)
+[![License](https://img.shields.io/github/license/optMD/gost-docx)](LICENSE)
+
+[Installation](#installation-for-ai-agents) · [Quick start](#quick-start) · [Examples](examples/) · [Architecture](docs/architecture.md)
 
 Reusable skill for creating, auditing, and formatting Word documents (`.docx`) against GOST requirements and user-provided institutional guidelines.
 
 `gost-docx` separates document mechanics from document content. It configures layout, structure, and validation without inventing text, sources, conclusions, or personal data.
+
+![gost-docx workflow](docs/demo.svg)
 
 ## Features
 
@@ -116,8 +122,11 @@ tests/                            Regression tests and fixtures
 examples/                        Reproducible end-to-end example
 docs/architecture.md             Data-flow architecture diagram
 docs/installation.md             Installation for AI agents
+docs/demo.svg                    Workflow illustration
 CHANGELOG.md                     Change history
 SECURITY.md                      Security policy
+CODE_OF_CONDUCT.md               Code of conduct
+CITATION.cff                     Citation metadata
 LICENSE                          MIT License
 README.md                        Russian documentation
 ```
@@ -133,6 +142,13 @@ README.md                        Russian documentation
 | Citation order | ✅ |
 | Document structure and appendices | ✅ |
 | Formulas and rendered visual layout | manual review |
+
+## Limitations
+
+- formulas and rendered visual output require manual review;
+- the Word table of contents must be updated in Microsoft Word after generation;
+- complex tables and non-standard title pages may require manual refinement;
+- the audit covers only rules implemented in `scripts/audit_docx.py`.
 
 ## Validation
 
@@ -152,5 +168,7 @@ Inspect rendered output with LibreOffice when a change affects pagination, table
 Use focused branches and pull requests. Keep independent behavior changes in separate commits, write commit messages in English using imperative subjects, and add regression tests for behavior changes.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow.
+
+See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community guidelines and [CITATION.cff](CITATION.cff) for citation metadata.
 
 For the primary Russian documentation, see [README.md](README.md).

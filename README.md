@@ -5,10 +5,16 @@
 [![CI](https://github.com/optMD/gost-docx/actions/workflows/validate.yml/badge.svg)](https://github.com/optMD/gost-docx/actions/workflows/validate.yml)
 [![Release](https://img.shields.io/github/v/release/optMD/gost-docx?display_name=tag)](https://github.com/optMD/gost-docx/releases)
 [![License](https://img.shields.io/github/license/optMD/gost-docx)](LICENSE)
+[![Python](https://img.shields.io/badge/tested%20with-Python%203.12-blue)](.github/workflows/validate.yml)
+[![Node.js](https://img.shields.io/badge/tested%20with-Node.js%2020-green)](.github/workflows/validate.yml)
+
+[Установка](#установка-skill) · [Быстрый старт](#быстрый-старт) · [Примеры](examples/) · [Архитектура](docs/architecture.md) · [Разработка](#разработка-и-релизы)
 
 `gost-docx` — переиспользуемый Agent Skill и набор локальных инструментов для работы с Word-документами (`.docx`) по ГОСТ 7.32-2017, ГОСТ Р 7.0.100-2018 и предоставленным пользователем методичкам.
 
 ![gost-docx — генерация, форматирование и аудит DOCX](docs/assets/social-preview.jpg)
+
+![Схема workflow gost-docx](docs/demo.svg)
 
 ## Зачем это нужно
 
@@ -177,6 +183,13 @@ NODE_PATH=scripts/node_modules \
 
 Потоки данных и границы между генерацией, форматированием и аудитом описаны в [архитектурной схеме](docs/architecture.md).
 
+## Ограничения
+
+- формулы и визуальный результат после рендера требуют ручной проверки;
+- содержание Word нужно обновить в Microsoft Word после генерации;
+- сложные таблицы и нестандартные титульные листы могут потребовать ручной доработки;
+- аудит проверяет только правила, реализованные в `scripts/audit_docx.py`, и не заменяет финальную проверку оформления человеком.
+
 ## Структура репозитория
 
 ```text
@@ -189,7 +202,10 @@ examples/                         воспроизводимый end-to-end пр
 tests/                            регрессионные тесты и фикстуры
 docs/architecture.md              схема потоков данных
 docs/installation.md              установка в AI-агенты
+docs/demo.svg                     визуальная схема workflow
 .github/workflows/validate.yml   обязательная CI-проверка
+CODE_OF_CONDUCT.md                кодекс поведения
+CITATION.cff                      метаданные для цитирования
 ```
 
 ## Проверка изменений
@@ -214,6 +230,8 @@ git diff --check
 - [CONTRIBUTING.md](CONTRIBUTING.md) — правила разработки;
 - [CHANGELOG.md](CHANGELOG.md) — история изменений;
 - [SECURITY.md](SECURITY.md) — сообщение об уязвимостях;
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — кодекс поведения;
+- [CITATION.cff](CITATION.cff) — сведения для цитирования;
 - [последний релиз](https://github.com/optMD/gost-docx/releases/latest);
 - [английская версия README](README_ENG.md).
 

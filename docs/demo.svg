@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360" role="img" aria-labelledby="title desc">
+  <title id="title">gost-docx workflow</title>
+  <desc id="desc">JSON specification flows into a DOCX document, a formatted copy, and an audit report.</desc>
+  <rect width="1200" height="360" rx="24" fill="#0b1730"/>
+  <text x="64" y="68" fill="#f8fafc" font-family="Arial, sans-serif" font-size="30" font-weight="700">gost-docx workflow</text>
+  <text x="64" y="102" fill="#9fb3d1" font-family="Arial, sans-serif" font-size="17">Generate · format · audit</text>
+  <g font-family="Arial, sans-serif">
+    <rect x="64" y="150" width="220" height="120" rx="18" fill="#172b50" stroke="#5d8ee8" stroke-width="2"/>
+    <text x="174" y="198" text-anchor="middle" fill="#b9d5ff" font-size="19" font-weight="700">JSON</text>
+    <text x="174" y="230" text-anchor="middle" fill="#f8fafc" font-size="16">specification</text>
+    <path d="M310 210h92" stroke="#62e6a7" stroke-width="4"/>
+    <path d="m390 198 18 12-18 12" fill="none" stroke="#62e6a7" stroke-width="4"/>
+    <rect x="428" y="150" width="220" height="120" rx="18" fill="#172b50" stroke="#5d8ee8" stroke-width="2"/>
+    <text x="538" y="198" text-anchor="middle" fill="#b9d5ff" font-size="19" font-weight="700">DOCX</text>
+    <text x="538" y="230" text-anchor="middle" fill="#f8fafc" font-size="16">new document</text>
+    <path d="M674 210h92" stroke="#62e6a7" stroke-width="4"/>
+    <path d="m754 198 18 12-18 12" fill="none" stroke="#62e6a7" stroke-width="4"/>
+    <rect x="792" y="150" width="220" height="120" rx="18" fill="#172b50" stroke="#62e6a7" stroke-width="2"/>
+    <text x="902" y="198" text-anchor="middle" fill="#b9d5d1" font-size="19" font-weight="700">AUDIT</text>
+    <text x="902" y="230" text-anchor="middle" fill="#f8fafc" font-size="16">Markdown report</text>
+  </g>
+</svg>

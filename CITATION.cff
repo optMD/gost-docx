@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+title: "gost-docx"
+message: "Если вы используете gost-docx, пожалуйста, укажите этот репозиторий в ссылке на программный инструмент."
+type: software
+authors:
+  - family-names: optMD
+    given-names: Project
+repository-code: "https://github.com/optMD/gost-docx"
+url: "https://github.com/optMD/gost-docx"
+license: MIT
+version: 0.1.0
+date-released: 2026-11-15
