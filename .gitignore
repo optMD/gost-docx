@@ -1,0 +1,7 @@
+scripts/node_modules/
+scripts/__pycache__/
+graphify-out/
+.DS_Store
+*.docx
+*.pdf
+*.pyc

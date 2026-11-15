@@ -1,0 +1,27 @@
+name: Bug report
+description: Report an incorrect document result or audit finding
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: Describe the incorrect behavior and the expected result.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Provide the document profile, command, and minimal safe example.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Provide the operating system, Python version, and Node version.
+    validations:
+      required: true
