@@ -17,6 +17,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parent
+VERSION = "0.1.0"
 
 
 def run_python(script: str, args: list[str]) -> int:
@@ -51,6 +52,9 @@ def doctor() -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Portable command runner for the gost-docx skill."
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"gost-docx {VERSION}"
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 

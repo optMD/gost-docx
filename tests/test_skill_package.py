@@ -45,6 +45,16 @@ class SkillPackageTests(unittest.TestCase):
         self.assertIn("build", result.stdout)
         self.assertIn("doctor", result.stdout)
 
+    def test_runner_reports_version(self):
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "scripts/gost_docx.py"), "--version"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertRegex(result.stdout, r"^gost-docx \d+\.\d+\.\d+\n$")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -63,6 +63,7 @@ npm ci --prefix scripts
 
 ```bash
 python3 scripts/gost_docx.py doctor
+python3 scripts/gost_docx.py --version
 ```
 
 Проверить существующий документ:

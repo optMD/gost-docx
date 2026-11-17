@@ -1,174 +1,125 @@
 # gost-docx
 
-[![Validate skill](https://github.com/optMD/gost-docx/actions/workflows/validate.yml/badge.svg)](https://github.com/optMD/gost-docx/actions/workflows/validate.yml)
-[![Release](https://img.shields.io/github/v/release/optMD/gost-docx?display_name=tag)](https://github.com/optMD/gost-docx/releases)
-[![License](https://img.shields.io/github/license/optMD/gost-docx)](LICENSE)
+**Audit. Format. Build DOCX documents to GOST.**
 
-[Installation](#installation-for-ai-agents) · [Quick start](#quick-start) · [Examples](examples/) · [Architecture](docs/architecture.md)
+<p align="center">
+  <img src="docs/assets/readme-hero.jpg" alt="DOCX document with margin guides and measurement tools" width="860">
+</p>
 
-Reusable skill for creating, auditing, and formatting Word documents (`.docx`) against GOST requirements and user-provided institutional guidelines.
+<p align="center">
+  A local Agent Skill for Codex, Claude Code, and other compatible agents.
+</p>
 
-`gost-docx` separates document mechanics from document content. It configures layout, structure, and validation without inventing text, sources, conclusions, or personal data.
+<p align="center">
+  <a href="https://github.com/optMD/gost-docx/actions/workflows/validate.yml"><img src="https://github.com/optMD/gost-docx/actions/workflows/validate.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/optMD/gost-docx/releases"><img src="https://img.shields.io/github/v/release/optMD/gost-docx?display_name=tag" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/optMD/gost-docx" alt="License"></a>
+</p>
 
-![gost-docx workflow](docs/demo.svg)
+`gost-docx` helps work with Word documents according to GOST 7.32-2017,
+GOST R 7.0.100-2018, and user-provided institutional guidelines.
 
 ## Features
 
-- read-only audit of an existing `.docx`;
-- safe copy formatting with the `_gost.docx` suffix;
-- new document generation from user-provided JSON;
-- GOST 7.32-2017 and GOST R 7.0.100-2018 support;
-- explicit profiles for user-provided institutional guidelines;
-- neutral title-page placeholder without personal data;
-- continuous page numbering with the title-page number hidden;
-- updateable Word table of contents;
-- chapters, subsections, sources, and appendices;
-- links from in-text citations to bibliography entries.
+| Mode | Result |
+| --- | --- |
+| Audit | Markdown report with findings |
+| Formatting | `*_gost.docx` copy; the source file is preserved |
+| Generation | New DOCX from a structured JSON specification |
 
-## Installation for AI agents
+Checks cover page size, margins, fonts, spacing, paragraphs, footers, page
+numbers, headings, captions, citations, and core document structure.
 
-Install globally for all detected agents:
+## Installation
+
+Install the skill for all detected agents:
 
 ```bash
 npx skills add https://github.com/optMD/gost-docx \
-  --skill gost-docx \
-  --agent '*' \
-  --global \
-  --yes
+  --skill gost-docx --agent '*' --global --yes
 ```
 
 Install only for Codex and Claude Code:
 
 ```bash
 npx skills add https://github.com/optMD/gost-docx \
-  --skill gost-docx \
-  --agent codex \
-  --agent claude-code \
-  --global \
-  --yes
+  --skill gost-docx --agent codex --agent claude-code --global --yes
 ```
 
-Verify and update:
-
-```bash
-npx skills list
-npx skills update
-```
-
-See [docs/installation.md](docs/installation.md) for project-local installation, agent paths, and Claude.ai upload notes.
+See the [installation guide](docs/installation.md) for project-local setup,
+agent paths, and Claude.ai upload notes.
 
 ## Quick start
 
-### Audit
+Install runtime dependencies from a clone:
 
 ```bash
-python3 scripts/audit_docx.py report.docx --out audit.md
-```
-
-Exit codes are `0` for no errors, `1` for findings, and `2` when the document cannot be opened.
-
-### Format a copy
-
-```bash
-python3 scripts/apply_gost.py report.docx
-```
-
-The source file is preserved and the result is written next to it as `report_gost.docx`.
-
-### Generate a document
-
-```bash
+git clone https://github.com/optMD/gost-docx.git
+cd gost-docx
+python3 -m pip install lxml
 npm ci --prefix scripts
-NODE_PATH=scripts/node_modules node scripts/build_gost.js task.json report.docx
 ```
 
-Example specification:
+Check the environment:
 
-```json
-{
-  "profile": "report",
-  "introduction": ["Text supplied by the author."],
-  "chapters": [
-    { "heading": "1 Main section", "paragraphs": ["Author-supplied text."], "subsections": [] }
-  ],
-  "conclusion": ["Conclusion supplied by the author."],
-  "sources": [],
-  "appendices": []
-}
+```bash
+python3 scripts/gost_docx.py doctor
+python3 scripts/gost_docx.py --version
 ```
 
-Supported fields are `profile`, `abstract`, `keywords`, `introduction`, `chapters`, `conclusion`, `sources`, and `appendices`.
+Audit an existing document:
 
-A complete reproducible example is available in [`examples/`](examples/). It runs one JSON specification through generation, copy formatting, and audit.
+```bash
+python3 scripts/gost_docx.py audit report.docx --out audit.md
+```
 
-## Behavior and safety
+Format a copy:
 
-The default baseline is GOST 7.32-2017 with bibliographic descriptions from GOST R 7.0.100-2018. User-provided guidelines can extend or override profile-specific structure. Conflicts are shown to the user instead of being resolved silently.
+```bash
+python3 scripts/gost_docx.py format report.docx
+```
 
-The skill never invents personal data, report text, conclusions, bibliography entries, measurements, results, or missing source metadata.
+Build a document from JSON:
 
-When no title page is supplied, the generated document uses `ТИТУЛЬНЫЙ ЛИСТ`. The page is counted but its visible number is hidden. Existing title pages are preserved.
+```bash
+python3 scripts/gost_docx.py build examples/task-report.json report.docx
+```
 
-## Repository layout
+The complete reproducible example is available in [`examples/`](examples/).
+
+## Principles
+
+- formatting never overwrites the source DOCX;
+- content, conclusions, sources, and personal data are never invented;
+- conflicts between GOST and a guideline are shown to the user;
+- final visual review after rendering remains a human responsibility.
+
+## Architecture
 
 ```text
-SKILL.md                         Agent instructions and workflow
-references/gost-rules.md         GOST rules and project decisions
-scripts/audit_docx.py            Read-only DOCX audit
-scripts/apply_gost.py            Formatting of a DOCX copy
-scripts/build_gost.js            New DOCX generator
-tests/                            Regression tests and fixtures
-.github/workflows/validate.yml   CI validation workflow
-examples/                        Reproducible end-to-end example
-docs/architecture.md             Data-flow architecture diagram
-docs/installation.md             Installation for AI agents
-docs/demo.svg                    Workflow illustration
-CHANGELOG.md                     Change history
-SECURITY.md                      Security policy
-CODE_OF_CONDUCT.md               Code of conduct
-CITATION.cff                     Citation metadata
-LICENSE                          MIT License
-README.md                        Russian documentation
+DOCX / JSON → gost-docx → audit / format / build → DOCX / report
 ```
 
-## Supported checks
-
-| Area | Status |
-| --- | --- |
-| A4/A3 page size and margins | ✅ |
-| Fonts, size, indents, and spacing | ✅ |
-| Footer and page numbering | ✅ |
-| Headings, captions, and list markers | ✅ |
-| Citation order | ✅ |
-| Document structure and appendices | ✅ |
-| Formulas and rendered visual layout | manual review |
+See [docs/architecture.md](docs/architecture.md) for the detailed data flow.
 
 ## Limitations
 
 - formulas and rendered visual output require manual review;
-- the Word table of contents must be updated in Microsoft Word after generation;
-- complex tables and non-standard title pages may require manual refinement;
-- the audit covers only rules implemented in `scripts/audit_docx.py`.
+- the Word table of contents must be updated after generation;
+- complex tables and non-standard title pages may need manual refinement.
 
-## Validation
+## Development
 
 ```bash
-npm ci --prefix scripts
-python3 -m pip install lxml
 python3 -m compileall -q scripts tests
 node --check scripts/build_gost.js
 python3 -m unittest discover -s tests -v
 git diff --check
 ```
 
-Inspect rendered output with LibreOffice when a change affects pagination, tables, captions, headers, footers, or numbering.
+Use focused branches and pull requests. See [CONTRIBUTING.md](CONTRIBUTING.md),
+[CHANGELOG.md](CHANGELOG.md), and [SECURITY.md](SECURITY.md).
 
-## Development
+## License
 
-Use focused branches and pull requests. Keep independent behavior changes in separate commits, write commit messages in English using imperative subjects, and add regression tests for behavior changes.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution workflow.
-
-See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community guidelines and [CITATION.cff](CITATION.cff) for citation metadata.
-
-For the primary Russian documentation, see [README.md](README.md).
+[MIT License](LICENSE) · [Русская версия README](README.md)
