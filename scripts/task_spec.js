@@ -1,0 +1,98 @@
+// Shared task loader for validate and build.
+const fs = require("fs");
+
+const PROFILES = {
+  report: "Отчёт",
+  coursework: "Курсовая работа",
+  thesis: "Выпускная квалификационная работа",
+  laboratory: "Лабораторная работа",
+  practical: "Практическая работа",
+  research: "Отчёт о научно-исследовательской работе",
+  technical: "Техническая документация",
+};
+
+function requireObject(value, path) {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${path}: expected an object`);
+  }
+}
+
+function requireText(value, path) {
+  if (typeof value !== "string") {
+    throw new Error(`${path}: expected a string`);
+  }
+}
+
+function validateList(value, path, validateItem = requireText) {
+  if (value === undefined) return;
+  if (!Array.isArray(value)) {
+    throw new Error(`${path}: expected an array`);
+  }
+  value.forEach((item, index) => validateItem(item, `${path}[${index}]`));
+}
+
+function validateSection(section, path) {
+  requireObject(section, path);
+  if (typeof section.heading !== "string" || !section.heading.trim()) {
+    throw new Error(`${path}.heading: expected a non-empty string`);
+  }
+  validateList(section.paragraphs, `${path}.paragraphs`);
+}
+
+function validateSpec(spec) {
+  requireObject(spec, "$");
+  if (spec.profile !== undefined) {
+    requireText(spec.profile, "profile");
+    if (!Object.hasOwn(PROFILES, spec.profile)) {
+      throw new Error(`profile: expected one of ${Object.keys(PROFILES).join(", ")}`);
+    }
+  }
+
+  if (spec.abstract !== undefined) {
+    requireObject(spec.abstract, "abstract");
+    for (const field of ["metadata", "keywords", "text"]) {
+      validateList(spec.abstract[field], `abstract.${field}`);
+    }
+  }
+  validateList(spec.introduction, "introduction");
+  validateList(spec.conclusion, "conclusion");
+  validateList(spec.chapters, "chapters", (chapter, path) => {
+    validateSection(chapter, path);
+    validateList(chapter.subsections, `${path}.subsections`, validateSection);
+  });
+  validateList(spec.sources, "sources", (source, path) => {
+    if (typeof source === "string") return;
+    requireObject(source, path);
+    requireText(source.text, `${path}.text`);
+  });
+  validateList(spec.appendices, "appendices", (appendix, path) => {
+    requireObject(appendix, path);
+    if (appendix.letter !== undefined) requireText(appendix.letter, `${path}.letter`);
+    if (appendix.heading !== undefined) requireText(appendix.heading, `${path}.heading`);
+    validateList(appendix.paragraphs, `${path}.paragraphs`);
+  });
+}
+
+function loadSpec(specPath) {
+  const contents = fs.readFileSync(specPath, "utf8");
+  let spec;
+  try {
+    spec = JSON.parse(contents);
+  } catch (error) {
+    throw new Error(`Invalid JSON in ${specPath}: ${error.message}`);
+  }
+  validateSpec(spec);
+  return spec;
+}
+
+module.exports = { loadSpec, PROFILES };
+
+if (require.main === module) {
+  try {
+    loadSpec(process.argv[2]);
+    console.log("Valid task JSON");
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+  }
+}
