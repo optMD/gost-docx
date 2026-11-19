@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+import sys
 import unittest
 import zipfile
 from pathlib import Path
@@ -15,6 +16,53 @@ W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
 
 class GenerationTests(unittest.TestCase):
+    def test_build_rejects_invalid_spec_before_touching_output(self):
+        cases = [
+            ("{", "Invalid JSON"),
+            ("[]", "$: expected an object"),
+            ('{"profile":"unknown"}', "profile: expected one of report"),
+            ('{"introduction":"text"}', "introduction: expected an array"),
+            ('{"abstract":{"keywords":[42]}}', "abstract.keywords[0]: expected a string"),
+            ('{"chapters":[{"heading":"Main","subsections":[{}]}]}',
+             "chapters[0].subsections[0].heading: expected a non-empty string"),
+            ('{"chapters":[{"heading":"Main","paragraphs":[{}]}]}',
+             "chapters[0].paragraphs[0]: expected a string"),
+            ('{"sources":[null]}', "sources[0]: expected an object"),
+            ('{"appendices":[{"letter":1}]}', "appendices[0].letter: expected a string"),
+        ]
+        with TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            spec = folder / "task.json"
+            output = folder / "report.docx"
+            output.write_bytes(b"existing file")
+            for contents, message in cases:
+                with self.subTest(contents=contents):
+                    spec.write_text(contents, encoding="utf-8")
+                    result = subprocess.run(
+                        [sys.executable, str(ROOT / "scripts" / "gost_docx.py"),
+                         "build", spec.name, output.name],
+                        cwd=folder,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(result.returncode, 1, result.stderr)
+                    self.assertIn(message, result.stderr)
+                    self.assertEqual(output.read_bytes(), b"existing file")
+
+    def test_build_supports_text_objects_and_optional_fields(self):
+        with TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            spec = folder / "task.json"
+            output = folder / "report.docx"
+            spec.write_text(json.dumps({"sources": ["First source", {"text": "Second source"}]}),
+                            encoding="utf-8")
+            subprocess.run(["node", str(SCRIPT), str(spec), str(output)], check=True, cwd=folder)
+            with zipfile.ZipFile(output) as archive:
+                document = ET.fromstring(archive.read("word/document.xml"))
+                text = " ".join(node.text or "" for node in document.iter(W + "t"))
+            self.assertIn("1. First source", text)
+            self.assertIn("2. Second source", text)
+
     def test_profile_generates_title_toc_and_page_rules(self):
         with TemporaryDirectory() as tmp:
             output = Path(tmp) / "report.docx"
