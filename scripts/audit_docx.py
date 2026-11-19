@@ -8,6 +8,7 @@ import argparse
 import re
 import sys
 import zipfile
+from pathlib import Path
 
 from lxml import etree
 
@@ -32,6 +33,15 @@ CAPTION_START = re.compile(r"^(Рисунок|Таблица)\s")
 
 def q(tag):
     return "{%s}%s" % (W, tag)
+
+
+def same_file(source: Path, destination: Path) -> bool:
+    if source.resolve() == destination.resolve():
+        return True
+    try:
+        return source.samefile(destination)
+    except FileNotFoundError:
+        return False
 
 
 def default_para_style_id(styles):
@@ -395,6 +405,8 @@ def main():
     ap.add_argument("docx")
     ap.add_argument("--out", help="сохранить отчёт в .md (оригинал не меняется)")
     args = ap.parse_args()
+    if args.out and same_file(Path(args.docx), Path(args.out)):
+        ap.error("Путь отчёта совпадает с исходным файлом")
     try:
         findings = Audit(args.docx).run()
     except SystemExit as e:
