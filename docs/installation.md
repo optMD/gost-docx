@@ -83,12 +83,18 @@ npm ci --prefix scripts
 ```bash
 python3 scripts/gost_docx.py audit input.docx --out audit.md
 python3 scripts/gost_docx.py format input.docx
+python3 scripts/gost_docx.py validate examples/task-report.json
 python3 scripts/gost_docx.py build examples/task-report.json output.docx
 python3 scripts/gost_docx.py doctor
 ```
 
-`doctor` показывает состояние Python, `lxml`, Node.js и локального пакета
-`docx`. Код возврата `0` означает, что окружение готово ко всем режимам.
+`validate` проверяет структуру задания без создания DOCX. Для этой команды
+достаточно Python и Node.js. Код `0` означает, что проверка прошла, код `1`
+сопровождается сообщением об ошибке.
+
+`doctor` проверяет Python, `lxml`, Node.js и загрузку пакета `docx`.
+Если зависимости не хватает, команда подскажет, как её установить.
+Код возврата `0` означает, что окружение готово ко всем режимам.
 
 Команды разрешают пути к скриптам и Node-модулям относительно каталога
 скилла, поэтому не зависят от `~/.claude`, `~/.agents` или рабочего каталога.

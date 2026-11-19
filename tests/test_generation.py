@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 import sys
 import unittest
@@ -12,10 +13,31 @@ from xml.etree import ElementTree as ET
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "build_gost.js"
 FIXTURE = ROOT / "tests" / "fixtures" / "minimal_report.json"
+CLI = ROOT / "scripts" / "gost_docx.py"
 W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
 
 class GenerationTests(unittest.TestCase):
+    def test_validate_checks_task_without_installing_docx(self):
+        with TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            shutil.copy(CLI, folder)
+            shutil.copy(CLI.with_name("task_spec.js"), folder)
+            command = [sys.executable, str(folder / CLI.name), "validate"]
+            result = subprocess.run([*command, str(FIXTURE)], cwd=folder,
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Valid task JSON", result.stdout)
+
+            task = folder / "invalid.json"
+            task.write_text('{"chapters":[{}]}', encoding="utf-8")
+            result = subprocess.run([*command, task.name], cwd=folder,
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn("chapters[0].heading", result.stderr)
+            self.assertEqual({path.name for path in folder.iterdir()},
+                             {CLI.name, "task_spec.js", task.name})
+
     def test_build_rejects_invalid_spec_before_touching_output(self):
         cases = [
             ("{", "Invalid JSON"),

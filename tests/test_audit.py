@@ -1,5 +1,6 @@
 import subprocess
 import os
+import sys
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -12,6 +13,25 @@ FIXTURE = ROOT / "tests" / "fixtures" / "minimal_report.json"
 
 
 class AuditTests(unittest.TestCase):
+    def test_report_and_format_refuse_to_overwrite_the_input(self):
+        with TemporaryDirectory() as tmp:
+            folder = Path(tmp)
+            source = folder / "input.docx"
+            subprocess.run(["node", str(GENERATOR), str(FIXTURE), str(source)], check=True)
+            original = source.read_bytes()
+            hard_link = folder / "alias.docx"
+            os.link(source, hard_link)
+            for script, code in ((AUDIT, 2), (AUDIT.with_name("apply_gost.py"), 1)):
+                for output in (source, hard_link):
+                    with self.subTest(script=script.name, output=output.name):
+                        result = subprocess.run(
+                            [sys.executable, str(script), str(source), "--out", str(output)],
+                            capture_output=True, text=True,
+                        )
+                        self.assertEqual(result.returncode, code, result.stderr)
+                        self.assertIn("совпадает с исходным файлом", result.stderr)
+                        self.assertEqual(source.read_bytes(), original)
+
     def test_generated_document_is_openable_by_audit(self):
         try:
             import lxml  # noqa: F401

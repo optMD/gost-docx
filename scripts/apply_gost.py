@@ -17,7 +17,10 @@ from pathlib import Path
 from lxml import etree
 
 sys.path.insert(0, str(Path(__file__).parent))
-from audit_docx import A4, FIRST_INDENT, FONT, LINE_15, MARGINS, NS, R, SIZE_HALFPT, W, Audit, default_para_style_id, q  # noqa: E402
+from audit_docx import (  # noqa: E402
+    A4, FIRST_INDENT, FONT, LINE_15, MARGINS, NS, R, SIZE_HALFPT, W,
+    Audit, default_para_style_id, q, same_file,
+)
 
 PPR_ORDER = [
     "pStyle", "keepNext", "keepLines", "pageBreakBefore", "framePr", "widowControl", "numPr",
@@ -308,7 +311,7 @@ def main():
 
     src = Path(args.docx)
     out = Path(args.out) if args.out else src.with_name(src.stem + "_gost.docx")
-    if out.resolve() == src.resolve():
+    if same_file(src, out):
         raise SystemExit("Результат совпадает с исходным файлом — оригинал не перезаписываю")
 
     audit = Audit(args.docx)
