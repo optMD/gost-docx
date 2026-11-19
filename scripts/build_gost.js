@@ -7,7 +7,17 @@ const { loadSpec, PROFILES } = require("./task_spec");
 const {
   Document, Packer, Paragraph, TextRun, Footer, AlignmentType, PageNumber,
   HeadingLevel, LineRuleType, TableOfContents,
-} = require("docx");
+} = loadDocx();
+
+function loadDocx() {
+  try {
+    return require("docx");
+  } catch (error) {
+    if (error.code !== "MODULE_NOT_FOUND") throw error;
+    console.error(`Install the Node.js dependencies: npm ci --prefix "${__dirname}"`);
+    process.exit(1);
+  }
+}
 
 const FONT = "Times New Roman";
 const SIZE = 28; // 14 pt in half-points

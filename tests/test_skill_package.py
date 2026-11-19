@@ -1,3 +1,4 @@
+import os
 import re
 import subprocess
 import sys
@@ -54,6 +55,28 @@ class SkillPackageTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertRegex(result.stdout, r"^gost-docx \d+\.\d+\.\d+\n$")
+
+    def test_runner_explains_missing_node(self):
+        env = {**os.environ, "PATH": ""}
+        runner = [sys.executable, str(ROOT / "scripts/gost_docx.py")]
+        result = subprocess.run([*runner, "validate", "task.json"], env=env,
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("Install Node.js", result.stderr)
+
+        result = subprocess.run([*runner, "doctor"], env=env,
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("MISSING node", result.stdout)
+        self.assertIn("SKIPPED docx", result.stdout)
+
+    def test_runner_explains_missing_lxml(self):
+        result = subprocess.run(
+            [sys.executable, "-I", "-S", str(ROOT / "scripts/gost_docx.py"), "audit", "input.docx"],
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("python3 -m pip install lxml", result.stderr)
 
 
 if __name__ == "__main__":

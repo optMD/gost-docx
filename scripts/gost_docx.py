@@ -8,7 +8,7 @@ works from a cloned repository and from an installed agent skill directory.
 from __future__ import annotations
 
 import argparse
-import importlib.util
+import importlib
 import os
 import shutil
 import subprocess
@@ -18,13 +18,31 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 VERSION = "0.1.0"
+LXML_HINT = "Install lxml in the active Python environment: python3 -m pip install lxml"
+NODE_HINT = "Install Node.js and make sure node is on PATH."
+DOCX_HINT = f'Install the Node.js dependencies: npm ci --prefix "{ROOT}"'
+
+
+def has_lxml() -> bool:
+    try:
+        importlib.import_module("lxml.etree")
+    except ImportError:
+        return False
+    return True
 
 
 def run_python(script: str, args: list[str]) -> int:
+    if not has_lxml():
+        print(LXML_HINT, file=sys.stderr)
+        return 1
     return subprocess.run([sys.executable, str(ROOT / script), *args]).returncode
 
 
 def run_node(script: str, args: list[str]) -> int:
+    node = shutil.which("node")
+    if node is None:
+        print(NODE_HINT, file=sys.stderr)
+        return 1
     env = os.environ.copy()
     node_modules = ROOT / "node_modules"
     existing = env.get("NODE_PATH")
@@ -32,21 +50,34 @@ def run_node(script: str, args: list[str]) -> int:
         part for part in (str(node_modules), existing) if part
     )
     return subprocess.run(
-        ["node", str(ROOT / script), *args], env=env
+        [node, str(ROOT / script), *args], env=env
     ).returncode
 
 
 def doctor() -> int:
-    """Report whether optional runtime dependencies are available."""
-    checks = {
-        "python": True,
-        "lxml": importlib.util.find_spec("lxml") is not None,
-        "node": shutil.which("node") is not None,
-        "docx": (ROOT / "node_modules" / "docx").is_dir(),
-    }
-    for name, available in checks.items():
+    """Check dependencies and show how to install missing components."""
+    node = shutil.which("node")
+    checks = [
+        ("python", True, ""),
+        ("lxml", has_lxml(), LXML_HINT),
+        ("node", node is not None, NODE_HINT),
+    ]
+    if node is not None:
+        result = subprocess.run(
+            [node, "-e", 'require("docx")'],
+            cwd=ROOT,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        checks.append(("docx", result.returncode == 0, DOCX_HINT))
+
+    for name, available, hint in checks:
         print(f"{'OK' if available else 'MISSING':7} {name}")
-    return 0 if all(checks.values()) else 1
+        if not available:
+            print(f"        {hint}")
+    if node is None:
+        print("SKIPPED docx (requires Node.js)")
+    return 0 if all(available for _, available, _ in checks) else 1
 
 
 def main() -> int:
