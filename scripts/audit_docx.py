@@ -35,6 +35,36 @@ def q(tag):
     return "{%s}%s" % (W, tag)
 
 
+def has_page_field(root):
+    """Recognize PAGE commands, including instructions split across runs."""
+    if root is None:
+        return False
+
+    def is_page(instruction):
+        tokens = instruction.split()
+        return bool(tokens and tokens[0].upper() == "PAGE")
+
+    fields = []
+    for element in root.iter():
+        if element.tag == q("fldSimple"):
+            if is_page(element.get(q("instr"), "")):
+                return True
+        elif element.tag == q("fldChar"):
+            kind = element.get(q("fldCharType"))
+            if kind == "begin":
+                fields.append([])
+            elif kind in ("separate", "end") and fields:
+                if fields[-1] is not None and is_page("".join(fields[-1])):
+                    return True
+                if kind == "end":
+                    fields.pop()
+                else:
+                    fields[-1] = None
+        elif element.tag == q("instrText") and fields and fields[-1] is not None:
+            fields[-1].append(element.text or "")
+    return False
+
+
 def same_file(source: Path, destination: Path) -> bool:
     if source.resolve() == destination.resolve():
         return True
@@ -142,10 +172,7 @@ class Audit:
             self.check_first_page_footer(s, where)
 
     def _footer_has_page(self, footer):
-        return bool(footer is not None and (
-            any("PAGE" in (t.text or "") for t in footer.iter(q("instrText")))
-            or any("PAGE" in (f.get(q("instr")) or "") for f in footer.iter(q("fldSimple")))
-        ))
+        return has_page_field(footer)
 
     def check_first_page_footer(self, sect, where):
         """Check that the counted title page has no visible page number."""
@@ -176,9 +203,7 @@ class Audit:
         if footer is None:
             self.add("ошибка", where, "колонтитул указан, но файл не найден")
             return
-        has_page = any("PAGE" in (t.text or "") for t in footer.iter(q("instrText"))) or any(
-            "PAGE" in (f.get(q("instr")) or "") for f in footer.iter(q("fldSimple"))
-        )
+        has_page = has_page_field(footer)
         if not has_page:
             self.add("ошибка", where, "в колонтитуле нет поля PAGE — номер страницы не выводится")
         centered = any(
