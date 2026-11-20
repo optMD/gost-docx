@@ -19,7 +19,7 @@ from lxml import etree
 sys.path.insert(0, str(Path(__file__).parent))
 from audit_docx import (  # noqa: E402
     A4, FIRST_INDENT, FONT, LINE_15, MARGINS, NS, R, SIZE_HALFPT, W,
-    Audit, default_para_style_id, q, same_file,
+    Audit, default_para_style_id, has_page_field, q, same_file,
 )
 
 PPR_ORDER = [
@@ -115,9 +115,7 @@ def ensure_footer(doc, rels, parts, sect):
     footer = etree.fromstring(parts[name]) if name in parts else None
     if footer is None:
         raise SystemExit(f"Колонтитул {name} указан, но не найден в архиве")
-    if not any("PAGE" in (t.text or "") for t in footer.iter(q("instrText"))) and not any(
-        "PAGE" in (f.get(q("instr")) or "") for f in footer.iter(q("fldSimple"))
-    ):
+    if not has_page_field(footer):
         para = footer.find(q("p"))
         if para is None:
             para = etree.SubElement(footer, q("p"))
