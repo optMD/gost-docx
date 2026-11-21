@@ -66,6 +66,10 @@ class GenerationTests(unittest.TestCase):
             ('{"chapters":[{"heading":"Main","paragraphs":[{}]}]}',
              "chapters[0].paragraphs[0]: expected a string"),
             ('{"sources":[null]}', "sources[0]: expected an object"),
+            ('{"sources":[""]}', "sources[0]: expected a non-empty string"),
+            ('{"sources":["  "]}', "sources[0]: expected a non-empty string"),
+            ('{"sources":[{"text":""}]}', "sources[0].text: expected a non-empty string"),
+            ('{"sources":[{"text":"  "}]}', "sources[0].text: expected a non-empty string"),
             ('{"appendices":[{"letter":1}]}', "appendices[0].letter: expected a string"),
         ]
         with TemporaryDirectory() as tmp:

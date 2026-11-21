@@ -64,9 +64,11 @@ function validateSpec(spec) {
     validateList(chapter.subsections, `${path}.subsections`, validateSection);
   });
   validateList(spec.sources, "sources", (source, path) => {
-    if (typeof source === "string") return;
-    requireObject(source, path);
-    requireText(source.text, `${path}.text`);
+    const textPath = typeof source === "string" ? path : `${path}.text`;
+    if (typeof source !== "string") requireObject(source, path);
+    const text = typeof source === "string" ? source : source.text;
+    requireText(text, textPath);
+    if (!text.trim()) throw new Error(`${textPath}: expected a non-empty string`);
   });
   validateList(spec.appendices, "appendices", (appendix, path) => {
     requireObject(appendix, path);
