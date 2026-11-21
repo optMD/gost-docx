@@ -18,6 +18,19 @@ W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
 
 class GenerationTests(unittest.TestCase):
+    def test_utf8_bom_task_validates_and_builds(self):
+        with TemporaryDirectory() as tmp:
+            task = Path(tmp) / "task.json"
+            output = Path(tmp) / "report.docx"
+            task.write_text(json.dumps({"sources": ["BOM source"]}), encoding="utf-8-sig")
+            for args in (["validate", str(task)], ["build", str(task), str(output)]):
+                result = subprocess.run([sys.executable, str(CLI), *args],
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+            with zipfile.ZipFile(output) as archive:
+                document = ET.fromstring(archive.read("word/document.xml"))
+            self.assertIn("BOM source", "".join(document.itertext()))
+
     def test_validate_checks_task_without_installing_docx(self):
         with TemporaryDirectory() as tmp:
             folder = Path(tmp)
@@ -45,11 +58,18 @@ class GenerationTests(unittest.TestCase):
             ('{"profile":"unknown"}', "profile: expected one of report"),
             ('{"introduction":"text"}', "introduction: expected an array"),
             ('{"abstract":{"keywords":[42]}}', "abstract.keywords[0]: expected a string"),
+            ('{"keywords":["ГОСТ"]}', "keywords: move this field to abstract.keywords"),
+            ('{"keywords":[],"abstract":{"keywords":["ГОСТ"]}}',
+             "keywords: move this field to abstract.keywords"),
             ('{"chapters":[{"heading":"Main","subsections":[{}]}]}',
              "chapters[0].subsections[0].heading: expected a non-empty string"),
             ('{"chapters":[{"heading":"Main","paragraphs":[{}]}]}',
              "chapters[0].paragraphs[0]: expected a string"),
             ('{"sources":[null]}', "sources[0]: expected an object"),
+            ('{"sources":[""]}', "sources[0]: expected a non-empty string"),
+            ('{"sources":["  "]}', "sources[0]: expected a non-empty string"),
+            ('{"sources":[{"text":""}]}', "sources[0].text: expected a non-empty string"),
+            ('{"sources":[{"text":"  "}]}', "sources[0].text: expected a non-empty string"),
             ('{"appendices":[{"letter":1}]}', "appendices[0].letter: expected a string"),
         ]
         with TemporaryDirectory() as tmp:

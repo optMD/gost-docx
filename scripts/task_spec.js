@@ -41,6 +41,9 @@ function validateSection(section, path) {
 
 function validateSpec(spec) {
   requireObject(spec, "$");
+  if (Object.hasOwn(spec, "keywords")) {
+    throw new Error("keywords: move this field to abstract.keywords (array of strings)");
+  }
   if (spec.profile !== undefined) {
     requireText(spec.profile, "profile");
     if (!Object.hasOwn(PROFILES, spec.profile)) {
@@ -61,9 +64,11 @@ function validateSpec(spec) {
     validateList(chapter.subsections, `${path}.subsections`, validateSection);
   });
   validateList(spec.sources, "sources", (source, path) => {
-    if (typeof source === "string") return;
-    requireObject(source, path);
-    requireText(source.text, `${path}.text`);
+    const textPath = typeof source === "string" ? path : `${path}.text`;
+    if (typeof source !== "string") requireObject(source, path);
+    const text = typeof source === "string" ? source : source.text;
+    requireText(text, textPath);
+    if (!text.trim()) throw new Error(`${textPath}: expected a non-empty string`);
   });
   validateList(spec.appendices, "appendices", (appendix, path) => {
     requireObject(appendix, path);
@@ -77,7 +82,7 @@ function loadSpec(specPath) {
   const contents = fs.readFileSync(specPath, "utf8");
   let spec;
   try {
-    spec = JSON.parse(contents);
+    spec = JSON.parse(contents.replace(/^\uFEFF/, ""));
   } catch (error) {
     throw new Error(`Invalid JSON in ${specPath}: ${error.message}`);
   }
