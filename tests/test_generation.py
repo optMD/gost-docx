@@ -18,6 +18,19 @@ W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
 
 class GenerationTests(unittest.TestCase):
+    def test_utf8_bom_task_validates_and_builds(self):
+        with TemporaryDirectory() as tmp:
+            task = Path(tmp) / "task.json"
+            output = Path(tmp) / "report.docx"
+            task.write_text(json.dumps({"sources": ["BOM source"]}), encoding="utf-8-sig")
+            for args in (["validate", str(task)], ["build", str(task), str(output)]):
+                result = subprocess.run([sys.executable, str(CLI), *args],
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+            with zipfile.ZipFile(output) as archive:
+                document = ET.fromstring(archive.read("word/document.xml"))
+            self.assertIn("BOM source", "".join(document.itertext()))
+
     def test_validate_checks_task_without_installing_docx(self):
         with TemporaryDirectory() as tmp:
             folder = Path(tmp)

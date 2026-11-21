@@ -80,7 +80,7 @@ function loadSpec(specPath) {
   const contents = fs.readFileSync(specPath, "utf8");
   let spec;
   try {
-    spec = JSON.parse(contents);
+    spec = JSON.parse(contents.replace(/^\uFEFF/, ""));
   } catch (error) {
     throw new Error(`Invalid JSON in ${specPath}: ${error.message}`);
   }
