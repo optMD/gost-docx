@@ -41,6 +41,9 @@ function validateSection(section, path) {
 
 function validateSpec(spec) {
   requireObject(spec, "$");
+  if (Object.hasOwn(spec, "keywords")) {
+    throw new Error("keywords: move this field to abstract.keywords (array of strings)");
+  }
   if (spec.profile !== undefined) {
     requireText(spec.profile, "profile");
     if (!Object.hasOwn(PROFILES, spec.profile)) {
