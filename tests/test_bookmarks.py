@@ -4,7 +4,7 @@ from pathlib import Path
 from lxml import etree
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from audit_docx import W, q
+from audit_docx import Audit, W, R, q
 from apply_gost import fix_citations
 
 
@@ -17,6 +17,36 @@ def document():
 
 
 class BookmarkTests(unittest.TestCase):
+    def audit_links(self, doc):
+        audit = Audit.__new__(Audit)
+        audit.doc = doc
+        audit.findings = []
+        audit.check_bookmarks()
+        return str(audit.findings)
+
+    def test_audit_accepts_repaired_document(self):
+        doc = document()
+        fix_citations(doc)
+        self.assertEqual(self.audit_links(doc), "[]")
+
+    def test_audit_reports_broken_links_and_unpaired_bookmarks(self):
+        doc = document()
+        next(doc.iter(q("bookmarkEnd"))).getparent().remove(next(doc.iter(q("bookmarkEnd"))))
+        link = etree.SubElement(doc, q("hyperlink"))
+        link.set(q("anchor"), "Missing")
+        findings = self.audit_links(doc)
+        self.assertIn("пара начала и конца", findings)
+        self.assertIn("не найдена целевая закладка Missing", findings)
+        link.set(f"{{{R}}}id", "external")
+        self.assertNotIn("Missing", self.audit_links(doc))
+
+    def test_audit_reports_duplicate_names(self):
+        doc = document()
+        start = etree.SubElement(doc, q("bookmarkStart"))
+        start.set(q("name"), "Author")
+        start.set(q("id"), "6")
+        self.assertIn("повторяется имя закладки Author", self.audit_links(doc))
+
     def test_repeated_format_repairs_duplicates_and_preserves_author_bookmark(self):
         doc = document()
         fix_citations(doc)
