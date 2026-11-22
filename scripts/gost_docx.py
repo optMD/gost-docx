@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import json
 import os
 import shutil
 import subprocess
@@ -54,7 +55,7 @@ def run_node(script: str, args: list[str]) -> int:
     ).returncode
 
 
-def doctor() -> int:
+def doctor(json_output=False) -> int:
     """Check dependencies and show how to install missing components."""
     node = shutil.which("node")
     checks = [
@@ -71,6 +72,14 @@ def doctor() -> int:
         )
         checks.append(("docx", result.returncode == 0, DOCX_HINT))
 
+    ok = all(available for _, available, _ in checks)
+    if json_output:
+        items = [{"name": name, "status": "ok" if available else "missing",
+                  "hint": hint if not available else None} for name, available, hint in checks]
+        if node is None:
+            items.append({"name": "docx", "status": "skipped", "hint": NODE_HINT})
+        print(json.dumps({"schema_version": 1, "ok": ok, "checks": items}))
+        return 0 if ok else 1
     for name, available, hint in checks:
         print(f"{'OK' if available else 'MISSING':7} {name}")
         if not available:
@@ -101,7 +110,8 @@ def main() -> int:
     build.add_argument("args", nargs=argparse.REMAINDER)
     validate = subparsers.add_parser("validate", help="Check a task JSON file")
     validate.add_argument("task", help="Path to the task JSON")
-    subparsers.add_parser("doctor", help="Check the local runtime environment")
+    doctor_parser = subparsers.add_parser("doctor", help="Check the local runtime environment")
+    doctor_parser.add_argument("--json", action="store_true", help="Emit a structured dependency report")
 
     parsed = parser.parse_args()
     if parsed.command == "audit":
@@ -109,7 +119,7 @@ def main() -> int:
     if parsed.command == "format":
         return run_python("apply_gost.py", parsed.args)
     if parsed.command == "doctor":
-        return doctor()
+        return doctor(parsed.json)
     if parsed.command == "validate":
         return run_node("task_spec.js", [parsed.task])
     return run_node("build_gost.js", parsed.args)
