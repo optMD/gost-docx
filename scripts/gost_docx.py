@@ -110,6 +110,7 @@ def main() -> int:
     build.add_argument("args", nargs=argparse.REMAINDER)
     validate = subparsers.add_parser("validate", help="Check a task JSON file")
     validate.add_argument("task", help="Path to the task JSON")
+    validate.add_argument("--json", action="store_true", help="Emit a structured validation report")
     doctor_parser = subparsers.add_parser("doctor", help="Check the local runtime environment")
     doctor_parser.add_argument("--json", action="store_true", help="Emit a structured dependency report")
 
@@ -121,7 +122,10 @@ def main() -> int:
     if parsed.command == "doctor":
         return doctor(parsed.json)
     if parsed.command == "validate":
-        return run_node("task_spec.js", [parsed.task])
+        if parsed.json and shutil.which("node") is None:
+            print(json.dumps({"schema_version": 1, "ok": False, "errors": [{"message": NODE_HINT}]}))
+            return 1
+        return run_node("task_spec.js", [parsed.task, *(["--json"] if parsed.json else [])])
     return run_node("build_gost.js", parsed.args)
 
 
