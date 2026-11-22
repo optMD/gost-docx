@@ -93,11 +93,16 @@ function loadSpec(specPath) {
 module.exports = { loadSpec, PROFILES };
 
 if (require.main === module) {
+  const jsonOutput = process.argv.includes("--json");
   try {
     loadSpec(process.argv[2]);
-    console.log("Valid task JSON");
+    console.log(jsonOutput ? JSON.stringify({ schema_version: 1, ok: true, errors: [] }) : "Valid task JSON");
   } catch (error) {
-    console.error(error.message);
+    if (jsonOutput) {
+      console.log(JSON.stringify({ schema_version: 1, ok: false, errors: [{ message: error.message }] }));
+    } else {
+      console.error(error.message);
+    }
     process.exitCode = 1;
   }
 }

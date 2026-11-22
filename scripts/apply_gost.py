@@ -296,6 +296,18 @@ def fix_citations(doc):
         return 0, 0
     bm_id = max((int(b.get(q("id"))) for b in doc.iter(q("bookmarkStart"))), default=0) + 1
     for n, p in sorted(index.items()):
+        # Replace only our bookmark on this bibliography paragraph. A matching
+        # name elsewhere may belong to the author and must not be overwritten.
+        name = bib_anchor(n)
+        existing = [b for b in doc.iter(q("bookmarkStart")) if b.get(q("name")) == name]
+        if any(b.getparent() is not p for b in existing):
+            raise SystemExit(f"Закладка {name} уже используется вне записи источника")
+        ids = {b.get(q("id")) for b in existing}
+        for b in existing:
+            p.remove(b)
+        for end in list(doc.iter(q("bookmarkEnd"))):
+            if end.get(q("id")) in ids:
+                end.getparent().remove(end)
         add_bookmark(p, bib_anchor(n), bm_id)
         bm_id += 1
     return len(index), link_citations(doc, index)

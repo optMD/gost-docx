@@ -18,6 +18,29 @@ W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
 
 class GenerationTests(unittest.TestCase):
+    def test_validation_json_reports_success_and_failures(self):
+        with TemporaryDirectory() as tmp:
+            task = Path(tmp) / "task.json"
+            for content, expected in [("{}", True), ("{", False),
+                                      ('{"sources":[""]}', False), (None, False)]:
+                with self.subTest(content=content):
+                    if content is None:
+                        task.unlink()
+                    else:
+                        task.write_text(content, encoding="utf-8")
+                    result = subprocess.run([sys.executable, str(CLI), "validate", str(task), "--json"],
+                                            capture_output=True, text=True)
+                    report = json.loads(result.stdout)
+                    self.assertEqual(report["schema_version"], 1)
+                    self.assertEqual(report["ok"], expected)
+                    self.assertEqual(bool(report["errors"]), not expected)
+                    self.assertEqual(result.returncode, 0 if expected else 1)
+                    self.assertEqual(result.stderr, "")
+            result = subprocess.run([sys.executable, str(CLI), "validate", str(task), "--json"],
+                                    env={**os.environ, "PATH": ""}, capture_output=True, text=True)
+            self.assertFalse(json.loads(result.stdout)["ok"])
+            self.assertEqual(result.returncode, 1)
+
     def test_utf8_bom_task_validates_and_builds(self):
         with TemporaryDirectory() as tmp:
             task = Path(tmp) / "task.json"

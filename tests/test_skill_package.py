@@ -1,4 +1,5 @@
 import os
+import json
 import re
 import subprocess
 import sys
@@ -10,6 +11,20 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class SkillPackageTests(unittest.TestCase):
+    def test_doctor_json_reports_missing_and_skipped_dependencies(self):
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "scripts/gost_docx.py"), "doctor", "--json"],
+            env={**os.environ, "PATH": ""}, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 1)
+        report = json.loads(result.stdout)
+        self.assertEqual(report["schema_version"], 1)
+        self.assertFalse(report["ok"])
+        checks = {item["name"]: item for item in report["checks"]}
+        self.assertEqual(checks["node"]["status"], "missing")
+        self.assertEqual(checks["docx"]["status"], "skipped")
+        self.assertTrue(checks["node"]["hint"])
+        self.assertEqual(result.stderr, "")
+
     def test_required_package_files_exist(self):
         for relative in (
             "SKILL.md",

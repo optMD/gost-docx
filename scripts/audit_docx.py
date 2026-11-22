@@ -384,6 +384,24 @@ class Audit:
         for idx, word, ctx in hits[:20]:
             self.add("ошибка", f"абз.{idx}", f"местоимение «{word}» в тексте (задание, 3-е лицо): …{ctx}…")
 
+    def check_bookmarks(self):
+        from collections import Counter
+        starts = list(self.doc.iter(q("bookmarkStart")))
+        names = Counter(b.get(q("name")) for b in starts)
+        ids = Counter(b.get(q("id")) for b in starts)
+        ends = Counter(b.get(q("id")) for b in self.doc.iter(q("bookmarkEnd")))
+        for name, count in names.items():
+            if name and count > 1:
+                self.add("ошибка", "закладки", f"повторяется имя закладки {name}")
+        for ident in ids.keys() | ends.keys():
+            if ident is None or ids[ident] != 1 or ends[ident] != 1:
+                self.add("ошибка", "закладки", f"некорректная пара начала и конца закладки {ident}")
+        for link in self.doc.iter(q("hyperlink")):
+            anchor = link.get(q("anchor"))
+            # External links may also carry a fragment belonging to their URL.
+            if anchor and not link.get(f"{{{R}}}id") and anchor not in names:
+                self.add("ошибка", "ссылки", f"не найдена целевая закладка {anchor}")
+
     def check_bullets(self):
         for idx, p in self.body_paragraphs():
             _, _, text = self.paragraph_info(p)
@@ -400,6 +418,7 @@ class Audit:
         self.check_abbreviations_threshold()
         self.check_captions()
         self.check_citations()
+        self.check_bookmarks()
         self.check_pronouns()
         self.check_bullets()
         return self.findings
