@@ -450,6 +450,7 @@ def main():
     ap.add_argument("docx")
     ap.add_argument("--out", help="сохранить отчёт в .md (оригинал не меняется)")
     ap.add_argument("--json", action="store_true", help="вывести машиночитаемый отчёт")
+    ap.add_argument("--fail-on-warning", action="store_true", help="считать предупреждения причиной неуспешной проверки")
     args = ap.parse_args()
     if args.out and same_file(Path(args.docx), Path(args.out)):
         ap.error("Путь отчёта совпадает с исходным файлом")
@@ -462,7 +463,8 @@ def main():
         else:
             print(e, file=sys.stderr)
         return 2
-    ok = not any(f[0] == "ошибка" for f in findings)
+    ok = not any(f[0] == "ошибка" or (args.fail_on_warning and f[0] == "предупреждение")
+                 for f in findings)
     report = (json.dumps({"schema_version": 1, "ok": ok, "completed": True,
                           "findings": [{"severity": "error" if level == "ошибка" else "warning",
                                         "location": where, "message": message}
@@ -472,7 +474,7 @@ def main():
         with open(args.out, "w", encoding="utf-8") as f:
             f.write(report)
     print(report)
-    return 1 if any(f[0] == "ошибка" for f in findings) else 0
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

@@ -102,6 +102,7 @@ def main() -> int:
     audit.add_argument("docx", help="Input DOCX document")
     audit.add_argument("--out", help="Save the audit report to this path")
     audit.add_argument("--json", action="store_true", help="Emit a structured DOCX audit report")
+    audit.add_argument("--fail-on-warning", action="store_true", help="Return failure for warnings as well as errors")
 
     format_parser = subparsers.add_parser(
         "format", help="Format a DOCX copy according to GOST rules"
@@ -127,7 +128,8 @@ def main() -> int:
                               "findings": [], "errors": [{"message": LXML_HINT}]}))
             return 2
         return run_python("audit_docx.py", [parsed.docx, *(["--out", parsed.out] if parsed.out else []),
-                                           *(["--json"] if parsed.json else [])])
+                                           *(["--json"] if parsed.json else []),
+                                           *(["--fail-on-warning"] if parsed.fail_on_warning else [])])
     if parsed.command == "format":
         return run_python("apply_gost.py", [parsed.docx, *(["--out", parsed.out] if parsed.out else [])])
     if parsed.command == "doctor":
