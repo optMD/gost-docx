@@ -18,6 +18,23 @@ W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
 
 class GenerationTests(unittest.TestCase):
+    def test_strict_build_rejects_typo_before_overwriting_output(self):
+        with TemporaryDirectory() as tmp:
+            task = Path(tmp) / "task.json"
+            output = Path(tmp) / "result.docx"
+            task.write_text('{"chapters":[{"heading":"Main","pargraphs":["Lost text"]}]}')
+            output.write_bytes(b"existing document")
+            command = [sys.executable, str(CLI), "build", str(task), str(output)]
+            result = subprocess.run([*command, "--strict"], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("chapters[0].pargraphs", result.stderr)
+            self.assertEqual(output.read_bytes(), b"existing document")
+            task.write_text('{"chapters":[{"heading":"Main","paragraphs":["Kept text"]}]}')
+            result = subprocess.run([*command, "--strict"], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            with zipfile.ZipFile(output) as archive:
+                self.assertIn("Kept text", archive.read("word/document.xml").decode())
+
     def test_strict_validation_detects_nested_typos_without_changing_default(self):
         cases = [({"titel": "Title"}, "$.titel"),
                  ({"abstract": {"keywrods": []}}, "abstract.keywrods"),

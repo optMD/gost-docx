@@ -112,6 +112,7 @@ def main() -> int:
     build = subparsers.add_parser("build", help="Build a DOCX from a JSON task")
     build.add_argument("task", help="Input task JSON")
     build.add_argument("output", help="Output DOCX path")
+    build.add_argument("--strict", action="store_true", help="Reject unknown task fields before writing DOCX")
     validate = subparsers.add_parser("validate", help="Check a task JSON file")
     validate.add_argument("task", help="Path to the task JSON")
     validate.add_argument("--json", action="store_true", help="Emit a structured validation report")
@@ -137,7 +138,7 @@ def main() -> int:
             return 1
         return run_node("task_spec.js", [parsed.task, *(["--json"] if parsed.json else []),
                                         *(["--strict"] if parsed.strict else [])])
-    return run_node("build_gost.js", [parsed.task, parsed.output])
+    return run_node("build_gost.js", [parsed.task, parsed.output, *(["--strict"] if parsed.strict else [])])
 
 
 if __name__ == "__main__":
