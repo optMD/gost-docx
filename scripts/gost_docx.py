@@ -101,6 +101,7 @@ def main() -> int:
     audit = subparsers.add_parser("audit", help="Audit an existing DOCX")
     audit.add_argument("docx", help="Input DOCX document")
     audit.add_argument("--out", help="Save the audit report to this path")
+    audit.add_argument("--json", action="store_true", help="Emit a structured DOCX audit report")
 
     format_parser = subparsers.add_parser(
         "format", help="Format a DOCX copy according to GOST rules"
@@ -120,7 +121,12 @@ def main() -> int:
 
     parsed = parser.parse_args()
     if parsed.command == "audit":
-        return run_python("audit_docx.py", [parsed.docx, *(["--out", parsed.out] if parsed.out else [])])
+        if parsed.json and not has_lxml():
+            print(json.dumps({"schema_version": 1, "ok": False, "completed": False,
+                              "findings": [], "errors": [{"message": LXML_HINT}]}))
+            return 2
+        return run_python("audit_docx.py", [parsed.docx, *(["--out", parsed.out] if parsed.out else []),
+                                           *(["--json"] if parsed.json else [])])
     if parsed.command == "format":
         return run_python("apply_gost.py", [parsed.docx, *(["--out", parsed.out] if parsed.out else [])])
     if parsed.command == "doctor":

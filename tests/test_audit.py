@@ -1,4 +1,5 @@
 import subprocess
+import json
 import os
 import sys
 import unittest
@@ -13,6 +14,26 @@ FIXTURE = ROOT / "tests" / "fixtures" / "minimal_report.json"
 
 
 class AuditTests(unittest.TestCase):
+    def test_json_audit_distinguishes_findings_from_unreadable_documents(self):
+        runner = [sys.executable, str(AUDIT.with_name("gost_docx.py")), "audit"]
+        with TemporaryDirectory() as tmp:
+            source = Path(tmp) / "input.docx"
+            report = Path(tmp) / "audit.json"
+            subprocess.run(["node", str(GENERATOR), str(FIXTURE), str(source)], check=True)
+            result = subprocess.run([*runner, "--json", "--out", str(report), str(source)],
+                                    capture_output=True, text=True)
+            data = json.loads(result.stdout)
+            self.assertTrue(data["completed"])
+            self.assertEqual(data, json.loads(report.read_text()))
+            self.assertEqual(result.returncode, 0 if data["ok"] else 1)
+            self.assertEqual(data["ok"], not any(f["severity"] == "error" for f in data["findings"]))
+            source.write_bytes(b"not a DOCX")
+            result = subprocess.run([*runner, str(source), "--json"], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 2)
+            self.assertFalse(json.loads(result.stdout)["completed"])
+            self.assertTrue(json.loads(result.stdout)["errors"])
+            self.assertEqual(result.stderr, "")
+
     def test_report_and_format_refuse_to_overwrite_the_input(self):
         with TemporaryDirectory() as tmp:
             folder = Path(tmp)

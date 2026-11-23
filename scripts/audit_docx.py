@@ -5,6 +5,7 @@
 Код возврата: 0 — нарушений нет, 1 — есть ошибки, 2 — файл не открыт.
 """
 import argparse
+import json
 import re
 import sys
 import zipfile
@@ -448,15 +449,25 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("docx")
     ap.add_argument("--out", help="сохранить отчёт в .md (оригинал не меняется)")
+    ap.add_argument("--json", action="store_true", help="вывести машиночитаемый отчёт")
     args = ap.parse_args()
     if args.out and same_file(Path(args.docx), Path(args.out)):
         ap.error("Путь отчёта совпадает с исходным файлом")
     try:
         findings = Audit(args.docx).run()
-    except SystemExit as e:
-        print(e, file=sys.stderr)
+    except (SystemExit, etree.XMLSyntaxError, ValueError, KeyError) as e:
+        if args.json:
+            print(json.dumps({"schema_version": 1, "ok": False, "completed": False,
+                              "findings": [], "errors": [{"message": str(e)}]}, ensure_ascii=False))
+        else:
+            print(e, file=sys.stderr)
         return 2
-    report = render(args.docx, findings)
+    ok = not any(f[0] == "ошибка" for f in findings)
+    report = (json.dumps({"schema_version": 1, "ok": ok, "completed": True,
+                          "findings": [{"severity": "error" if level == "ошибка" else "warning",
+                                        "location": where, "message": message}
+                                       for level, where, message in findings], "errors": []},
+                         ensure_ascii=False, indent=2) + "\n") if args.json else render(args.docx, findings)
     if args.out:
         with open(args.out, "w", encoding="utf-8") as f:
             f.write(report)
