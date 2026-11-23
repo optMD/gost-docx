@@ -154,6 +154,13 @@ async function main() {
     process.exit(2);
   }
   const spec = loadSpec(specPath);
+  if (fs.existsSync(outPath)) {
+    const input = fs.statSync(specPath);
+    const output = fs.statSync(outPath);
+    if (input.dev === output.dev && input.ino === output.ino) {
+      throw new Error("Output path refers to the input task — choose a different file");
+    }
+  }
   const buf = await Packer.toBuffer(build(spec));
   fs.writeFileSync(outPath, buf);
   console.log(`Created: ${outPath}`);

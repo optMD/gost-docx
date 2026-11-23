@@ -18,6 +18,23 @@ W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
 
 class GenerationTests(unittest.TestCase):
+    def test_build_preserves_task_for_same_path_and_aliases(self):
+        with TemporaryDirectory() as tmp:
+            task = Path(tmp) / "task.json"
+            task.write_text('{"introduction":["Keep this text"]}', encoding="utf-8")
+            original = task.read_bytes()
+            hardlink = Path(tmp) / "hard.docx"
+            os.link(task, hardlink)
+            symlink = Path(tmp) / "symbolic.docx"
+            symlink.symlink_to(task)
+            for output in (task, hardlink, symlink):
+                with self.subTest(output=output):
+                    result = subprocess.run([sys.executable, str(CLI), "build", str(task), str(output)],
+                                            capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertIn("Output path refers to the input task", result.stderr)
+                    self.assertEqual(task.read_bytes(), original)
+
     def test_validation_json_reports_success_and_failures(self):
         with TemporaryDirectory() as tmp:
             task = Path(tmp) / "task.json"
