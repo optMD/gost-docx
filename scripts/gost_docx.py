@@ -58,30 +58,42 @@ def run_node(script: str, args: list[str]) -> int:
 def doctor(json_output=False) -> int:
     """Check dependencies and show how to install missing components."""
     node = shutil.which("node")
+    probe_error = None
     checks = [
         ("python", True, ""),
         ("lxml", has_lxml(), LXML_HINT),
         ("node", node is not None, NODE_HINT),
     ]
     if node is not None:
-        result = subprocess.run(
-            [node, "-e", 'require("docx")'],
-            cwd=ROOT,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        checks.append(("docx", result.returncode == 0, DOCX_HINT))
+        try:
+            result = subprocess.run(
+                [node, "-e", 'require("docx")'],
+                cwd=ROOT,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+            )
+            checks.append(("docx", result.returncode == 0, DOCX_HINT))
+        except subprocess.TimeoutExpired:
+            probe_error = "Node.js dependency check exceeded 10 seconds. Check the Node.js installation and retry."
+        except OSError as error:
+            probe_error = f"Could not run Node.js dependency check: {error}"
+        if probe_error:
+            checks.append(("docx", False, probe_error))
 
     ok = all(available for _, available, _ in checks)
     if json_output:
         items = [{"name": name, "status": "ok" if available else "missing",
                   "hint": hint if not available else None} for name, available, hint in checks]
+        if probe_error:
+            items[-1]["status"] = "error"
         if node is None:
             items.append({"name": "docx", "status": "skipped", "hint": NODE_HINT})
         print(json.dumps({"schema_version": 1, "ok": ok, "checks": items}))
         return 0 if ok else 1
     for name, available, hint in checks:
-        print(f"{'OK' if available else 'MISSING':7} {name}")
+        status = "ERROR" if name == "docx" and probe_error else ("OK" if available else "MISSING")
+        print(f"{status:7} {name}")
         if not available:
             print(f"        {hint}")
     if node is None:
