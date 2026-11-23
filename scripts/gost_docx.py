@@ -111,6 +111,7 @@ def main() -> int:
     validate = subparsers.add_parser("validate", help="Check a task JSON file")
     validate.add_argument("task", help="Path to the task JSON")
     validate.add_argument("--json", action="store_true", help="Emit a structured validation report")
+    validate.add_argument("--strict", action="store_true", help="Reject unknown fields, including nested fields")
     doctor_parser = subparsers.add_parser("doctor", help="Check the local runtime environment")
     doctor_parser.add_argument("--json", action="store_true", help="Emit a structured dependency report")
 
@@ -125,7 +126,8 @@ def main() -> int:
         if parsed.json and shutil.which("node") is None:
             print(json.dumps({"schema_version": 1, "ok": False, "errors": [{"message": NODE_HINT}]}))
             return 1
-        return run_node("task_spec.js", [parsed.task, *(["--json"] if parsed.json else [])])
+        return run_node("task_spec.js", [parsed.task, *(["--json"] if parsed.json else []),
+                                        *(["--strict"] if parsed.strict else [])])
     return run_node("build_gost.js", parsed.args)
 
 

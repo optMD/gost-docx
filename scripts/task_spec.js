@@ -78,7 +78,26 @@ function validateSpec(spec) {
   });
 }
 
-function loadSpec(specPath) {
+function checkKnownFields(spec) {
+  function check(object, allowed, path) {
+    for (const key of Object.keys(object)) {
+      if (!allowed.includes(key)) throw new Error(`${path}.${key}: unknown field`);
+    }
+  }
+  check(spec, ["profile", "abstract", "introduction", "chapters", "conclusion", "sources", "appendices"], "$");
+  if (spec.abstract) check(spec.abstract, ["metadata", "keywords", "text"], "abstract");
+  (spec.chapters || []).forEach((chapter, i) => {
+    check(chapter, ["heading", "paragraphs", "subsections"], `chapters[${i}]`);
+    (chapter.subsections || []).forEach((section, j) =>
+      check(section, ["heading", "paragraphs"], `chapters[${i}].subsections[${j}]`));
+  });
+  (spec.sources || []).forEach((source, i) => {
+    if (typeof source !== "string") check(source, ["text"], `sources[${i}]`);
+  });
+  (spec.appendices || []).forEach((item, i) => check(item, ["letter", "heading", "paragraphs"], `appendices[${i}]`));
+}
+
+function loadSpec(specPath, strict = false) {
   const contents = fs.readFileSync(specPath, "utf8");
   let spec;
   try {
@@ -87,6 +106,7 @@ function loadSpec(specPath) {
     throw new Error(`Invalid JSON in ${specPath}: ${error.message}`);
   }
   validateSpec(spec);
+  if (strict) checkKnownFields(spec);
   return spec;
 }
 
@@ -95,7 +115,7 @@ module.exports = { loadSpec, PROFILES };
 if (require.main === module) {
   const jsonOutput = process.argv.includes("--json");
   try {
-    loadSpec(process.argv[2]);
+    loadSpec(process.argv[2], process.argv.includes("--strict"));
     console.log(jsonOutput ? JSON.stringify({ schema_version: 1, ok: true, errors: [] }) : "Valid task JSON");
   } catch (error) {
     if (jsonOutput) {
