@@ -11,6 +11,19 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class SkillPackageTests(unittest.TestCase):
+    def test_subcommand_help_and_argument_errors_need_no_dependencies(self):
+        runner = [sys.executable, "-I", "-S", str(ROOT / "scripts/gost_docx.py")]
+        for command, expected in [("audit", "--out"), ("format", "--out"), ("build", "output")]:
+            with self.subTest(command=command):
+                help_result = subprocess.run([*runner, command, "--help"],
+                                             env={**os.environ, "PATH": ""}, capture_output=True, text=True)
+                self.assertEqual(help_result.returncode, 0)
+                self.assertIn(expected, help_result.stdout)
+                missing = subprocess.run([*runner, command], capture_output=True, text=True)
+                self.assertEqual(missing.returncode, 2)
+                self.assertIn("required", missing.stderr)
+                self.assertNotIn("Install", missing.stderr)
+
     def test_doctor_json_reports_missing_and_skipped_dependencies(self):
         result = subprocess.run(
             [sys.executable, str(ROOT / "scripts/gost_docx.py"), "doctor", "--json"],

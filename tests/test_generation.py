@@ -18,6 +18,44 @@ W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 
 
 class GenerationTests(unittest.TestCase):
+    def test_strict_validation_detects_nested_typos_without_changing_default(self):
+        cases = [({"titel": "Title"}, "$.titel"),
+                 ({"abstract": {"keywrods": []}}, "abstract.keywrods"),
+                 ({"chapters": [{"heading": "Main", "pargraphs": []}]}, "chapters[0].pargraphs"),
+                 ({"sources": [{"text": "Book", "year": 2020}]}, "sources[0].year"),
+                 ({"appendices": [{"titel": "Extra"}]}, "appendices[0].titel")]
+        with TemporaryDirectory() as tmp:
+            task = Path(tmp) / "task.json"
+            for spec, path in cases:
+                with self.subTest(path=path):
+                    task.write_text(json.dumps(spec), encoding="utf-8")
+                    command = [sys.executable, str(CLI), "validate", str(task), "--json"]
+                    result = subprocess.run(command, capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    result = subprocess.run([*command, "--strict"], capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertIn(path, json.loads(result.stdout)["errors"][0]["message"])
+            result = subprocess.run([sys.executable, str(CLI), "validate", str(FIXTURE), "--strict"],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_build_preserves_task_for_same_path_and_aliases(self):
+        with TemporaryDirectory() as tmp:
+            task = Path(tmp) / "task.json"
+            task.write_text('{"introduction":["Keep this text"]}', encoding="utf-8")
+            original = task.read_bytes()
+            hardlink = Path(tmp) / "hard.docx"
+            os.link(task, hardlink)
+            symlink = Path(tmp) / "symbolic.docx"
+            symlink.symlink_to(task)
+            for output in (task, hardlink, symlink):
+                with self.subTest(output=output):
+                    result = subprocess.run([sys.executable, str(CLI), "build", str(task), str(output)],
+                                            capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 1)
+                    self.assertIn("Output path refers to the input task", result.stderr)
+                    self.assertEqual(task.read_bytes(), original)
+
     def test_validation_json_reports_success_and_failures(self):
         with TemporaryDirectory() as tmp:
             task = Path(tmp) / "task.json"

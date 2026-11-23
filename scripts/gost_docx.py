@@ -99,34 +99,45 @@ def main() -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     audit = subparsers.add_parser("audit", help="Audit an existing DOCX")
-    audit.add_argument("args", nargs=argparse.REMAINDER)
+    audit.add_argument("docx", help="Input DOCX document")
+    audit.add_argument("--out", help="Save the audit report to this path")
+    audit.add_argument("--json", action="store_true", help="Emit a structured DOCX audit report")
 
     format_parser = subparsers.add_parser(
         "format", help="Format a DOCX copy according to GOST rules"
     )
-    format_parser.add_argument("args", nargs=argparse.REMAINDER)
+    format_parser.add_argument("docx", help="Input DOCX document (preserved)")
+    format_parser.add_argument("--out", help="Output DOCX path (default: input_gost.docx)")
 
     build = subparsers.add_parser("build", help="Build a DOCX from a JSON task")
-    build.add_argument("args", nargs=argparse.REMAINDER)
+    build.add_argument("task", help="Input task JSON")
+    build.add_argument("output", help="Output DOCX path")
     validate = subparsers.add_parser("validate", help="Check a task JSON file")
     validate.add_argument("task", help="Path to the task JSON")
     validate.add_argument("--json", action="store_true", help="Emit a structured validation report")
+    validate.add_argument("--strict", action="store_true", help="Reject unknown fields, including nested fields")
     doctor_parser = subparsers.add_parser("doctor", help="Check the local runtime environment")
     doctor_parser.add_argument("--json", action="store_true", help="Emit a structured dependency report")
 
     parsed = parser.parse_args()
     if parsed.command == "audit":
-        return run_python("audit_docx.py", parsed.args)
+        if parsed.json and not has_lxml():
+            print(json.dumps({"schema_version": 1, "ok": False, "completed": False,
+                              "findings": [], "errors": [{"message": LXML_HINT}]}))
+            return 2
+        return run_python("audit_docx.py", [parsed.docx, *(["--out", parsed.out] if parsed.out else []),
+                                           *(["--json"] if parsed.json else [])])
     if parsed.command == "format":
-        return run_python("apply_gost.py", parsed.args)
+        return run_python("apply_gost.py", [parsed.docx, *(["--out", parsed.out] if parsed.out else [])])
     if parsed.command == "doctor":
         return doctor(parsed.json)
     if parsed.command == "validate":
         if parsed.json and shutil.which("node") is None:
             print(json.dumps({"schema_version": 1, "ok": False, "errors": [{"message": NODE_HINT}]}))
             return 1
-        return run_node("task_spec.js", [parsed.task, *(["--json"] if parsed.json else [])])
-    return run_node("build_gost.js", parsed.args)
+        return run_node("task_spec.js", [parsed.task, *(["--json"] if parsed.json else []),
+                                        *(["--strict"] if parsed.strict else [])])
+    return run_node("build_gost.js", [parsed.task, parsed.output])
 
 
 if __name__ == "__main__":
