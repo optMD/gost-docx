@@ -6,6 +6,8 @@
 """
 import argparse
 import json
+import os
+import tempfile
 import re
 import sys
 import zipfile
@@ -445,11 +447,27 @@ def render(path, findings):
     return "\n".join(lines) + "\n"
 
 
+def save_report(path, report):
+    """Replace the report only after the complete temporary file is written."""
+    destination = Path(path).resolve()
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=destination.parent,
+                                         prefix=".gost-audit-", delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(report)
+        os.replace(temporary, destination)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("docx")
     ap.add_argument("--out", help="сохранить отчёт в .md (оригинал не меняется)")
     ap.add_argument("--json", action="store_true", help="вывести машиночитаемый отчёт")
+    ap.add_argument("--fail-on-warning", action="store_true", help="считать предупреждения причиной неуспешной проверки")
     args = ap.parse_args()
     if args.out and same_file(Path(args.docx), Path(args.out)):
         ap.error("Путь отчёта совпадает с исходным файлом")
@@ -462,17 +480,29 @@ def main():
         else:
             print(e, file=sys.stderr)
         return 2
-    ok = not any(f[0] == "ошибка" for f in findings)
+    ok = not any(f[0] == "ошибка" or (args.fail_on_warning and f[0] == "предупреждение")
+                 for f in findings)
     report = (json.dumps({"schema_version": 1, "ok": ok, "completed": True,
                           "findings": [{"severity": "error" if level == "ошибка" else "warning",
                                         "location": where, "message": message}
                                        for level, where, message in findings], "errors": []},
                          ensure_ascii=False, indent=2) + "\n") if args.json else render(args.docx, findings)
     if args.out:
-        with open(args.out, "w", encoding="utf-8") as f:
-            f.write(report)
+        try:
+            save_report(args.out, report)
+        except OSError as error:
+            message = f"Не удалось сохранить отчёт: {error}"
+            if args.json:
+                result = json.loads(report)
+                result["ok"] = False
+                result["errors"].append({"message": message})
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                print(report)
+                print(message, file=sys.stderr)
+            return 2
     print(report)
-    return 1 if any(f[0] == "ошибка" for f in findings) else 0
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":

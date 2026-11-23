@@ -150,10 +150,10 @@ function build(spec) {
 async function main() {
   const [, , specPath, outPath] = process.argv;
   if (!specPath || !outPath) {
-    console.error("Usage: node build_gost.js assignment.json output.docx");
+    console.error("Usage: node build_gost.js assignment.json output.docx [--strict]");
     process.exit(2);
   }
-  const spec = loadSpec(specPath);
+  const spec = loadSpec(specPath, process.argv.slice(4).includes("--strict"));
   if (fs.existsSync(outPath)) {
     const input = fs.statSync(specPath);
     const output = fs.statSync(outPath);

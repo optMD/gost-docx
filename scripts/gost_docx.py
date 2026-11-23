@@ -58,30 +58,42 @@ def run_node(script: str, args: list[str]) -> int:
 def doctor(json_output=False) -> int:
     """Check dependencies and show how to install missing components."""
     node = shutil.which("node")
+    probe_error = None
     checks = [
         ("python", True, ""),
         ("lxml", has_lxml(), LXML_HINT),
         ("node", node is not None, NODE_HINT),
     ]
     if node is not None:
-        result = subprocess.run(
-            [node, "-e", 'require("docx")'],
-            cwd=ROOT,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-        checks.append(("docx", result.returncode == 0, DOCX_HINT))
+        try:
+            result = subprocess.run(
+                [node, "-e", 'require("docx")'],
+                cwd=ROOT,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+            )
+            checks.append(("docx", result.returncode == 0, DOCX_HINT))
+        except subprocess.TimeoutExpired:
+            probe_error = "Node.js dependency check exceeded 10 seconds. Check the Node.js installation and retry."
+        except OSError as error:
+            probe_error = f"Could not run Node.js dependency check: {error}"
+        if probe_error:
+            checks.append(("docx", False, probe_error))
 
     ok = all(available for _, available, _ in checks)
     if json_output:
         items = [{"name": name, "status": "ok" if available else "missing",
                   "hint": hint if not available else None} for name, available, hint in checks]
+        if probe_error:
+            items[-1]["status"] = "error"
         if node is None:
             items.append({"name": "docx", "status": "skipped", "hint": NODE_HINT})
         print(json.dumps({"schema_version": 1, "ok": ok, "checks": items}))
         return 0 if ok else 1
     for name, available, hint in checks:
-        print(f"{'OK' if available else 'MISSING':7} {name}")
+        status = "ERROR" if name == "docx" and probe_error else ("OK" if available else "MISSING")
+        print(f"{status:7} {name}")
         if not available:
             print(f"        {hint}")
     if node is None:
@@ -102,6 +114,7 @@ def main() -> int:
     audit.add_argument("docx", help="Input DOCX document")
     audit.add_argument("--out", help="Save the audit report to this path")
     audit.add_argument("--json", action="store_true", help="Emit a structured DOCX audit report")
+    audit.add_argument("--fail-on-warning", action="store_true", help="Return failure for warnings as well as errors")
 
     format_parser = subparsers.add_parser(
         "format", help="Format a DOCX copy according to GOST rules"
@@ -112,6 +125,7 @@ def main() -> int:
     build = subparsers.add_parser("build", help="Build a DOCX from a JSON task")
     build.add_argument("task", help="Input task JSON")
     build.add_argument("output", help="Output DOCX path")
+    build.add_argument("--strict", action="store_true", help="Reject unknown task fields before writing DOCX")
     validate = subparsers.add_parser("validate", help="Check a task JSON file")
     validate.add_argument("task", help="Path to the task JSON")
     validate.add_argument("--json", action="store_true", help="Emit a structured validation report")
@@ -126,7 +140,8 @@ def main() -> int:
                               "findings": [], "errors": [{"message": LXML_HINT}]}))
             return 2
         return run_python("audit_docx.py", [parsed.docx, *(["--out", parsed.out] if parsed.out else []),
-                                           *(["--json"] if parsed.json else [])])
+                                           *(["--json"] if parsed.json else []),
+                                           *(["--fail-on-warning"] if parsed.fail_on_warning else [])])
     if parsed.command == "format":
         return run_python("apply_gost.py", [parsed.docx, *(["--out", parsed.out] if parsed.out else [])])
     if parsed.command == "doctor":
@@ -137,7 +152,7 @@ def main() -> int:
             return 1
         return run_node("task_spec.js", [parsed.task, *(["--json"] if parsed.json else []),
                                         *(["--strict"] if parsed.strict else [])])
-    return run_node("build_gost.js", [parsed.task, parsed.output])
+    return run_node("build_gost.js", [parsed.task, parsed.output, *(["--strict"] if parsed.strict else [])])
 
 
 if __name__ == "__main__":
