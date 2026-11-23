@@ -6,6 +6,8 @@
 """
 import argparse
 import json
+import os
+import tempfile
 import re
 import sys
 import zipfile
@@ -445,6 +447,21 @@ def render(path, findings):
     return "\n".join(lines) + "\n"
 
 
+def save_report(path, report):
+    """Replace the report only after the complete temporary file is written."""
+    destination = Path(path).resolve()
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=destination.parent,
+                                         prefix=".gost-audit-", delete=False) as stream:
+            temporary = Path(stream.name)
+            stream.write(report)
+        os.replace(temporary, destination)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("docx")
@@ -471,8 +488,19 @@ def main():
                                        for level, where, message in findings], "errors": []},
                          ensure_ascii=False, indent=2) + "\n") if args.json else render(args.docx, findings)
     if args.out:
-        with open(args.out, "w", encoding="utf-8") as f:
-            f.write(report)
+        try:
+            save_report(args.out, report)
+        except OSError as error:
+            message = f"Не удалось сохранить отчёт: {error}"
+            if args.json:
+                result = json.loads(report)
+                result["ok"] = False
+                result["errors"].append({"message": message})
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                print(report)
+                print(message, file=sys.stderr)
+            return 2
     print(report)
     return 0 if ok else 1
 
