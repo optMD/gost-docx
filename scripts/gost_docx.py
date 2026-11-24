@@ -121,6 +121,7 @@ def main() -> int:
     )
     format_parser.add_argument("docx", help="Input DOCX document (preserved)")
     format_parser.add_argument("--out", help="Output DOCX path (default: input_gost.docx)")
+    format_parser.add_argument("--dry-run", action="store_true", help="Preview changed DOCX parts without saving")
 
     build = subparsers.add_parser("build", help="Build a DOCX from a JSON task")
     build.add_argument("task", help="Input task JSON")
@@ -143,7 +144,8 @@ def main() -> int:
                                            *(["--json"] if parsed.json else []),
                                            *(["--fail-on-warning"] if parsed.fail_on_warning else [])])
     if parsed.command == "format":
-        return run_python("apply_gost.py", [parsed.docx, *(["--out", parsed.out] if parsed.out else [])])
+        return run_python("apply_gost.py", [parsed.docx, *(["--out", parsed.out] if parsed.out else []),
+                                           *(["--dry-run"] if parsed.dry_run else [])])
     if parsed.command == "doctor":
         return doctor(parsed.json)
     if parsed.command == "validate":

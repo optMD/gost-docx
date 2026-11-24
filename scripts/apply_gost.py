@@ -364,6 +364,7 @@ def format_document():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("docx")
     ap.add_argument("--out", help="путь результата (по умолчанию файл_gost.docx рядом)")
+    ap.add_argument("--dry-run", action="store_true", help="показать изменяемые части без сохранения")
     args = ap.parse_args()
 
     src = Path(args.docx)
@@ -373,6 +374,7 @@ def format_document():
 
     audit = Audit(args.docx)
     parts = {n: audit.z.read(n) for n in audit.z.namelist()}
+    original_parts = parts.copy()
     order = audit.z.namelist()
     audit.z.close()
 
@@ -402,6 +404,14 @@ def format_document():
     if added_footer:
         order.append(added_footer)
 
+    if args.dry_run:
+        changed = sorted(name for name, content in parts.items() if original_parts.get(name) != content)
+        print("Предварительная проверка завершена. Файл не записан.")
+        print(f"Частей DOCX с изменениями: {len(changed)}.")
+        for name in changed:
+            print(f"- {name}")
+        print(f"Абзацев обработано: {n_body}. Источников: {n_bib}. Новых ссылок: {n_links}.")
+        return 0
     save_docx(out, parts, order)
     print(f"Готово: {out}. Абзацев основного текста оформлено: {n_body}.")
     print(f"Источников с закладками: {n_bib}. Ссылок [N] сделано кликабельными: {n_links}.")
