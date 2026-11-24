@@ -9,7 +9,9 @@
 """
 import argparse
 import copy
+import os
 import re
+import tempfile
 import sys
 import zipfile
 from pathlib import Path
@@ -19,7 +21,7 @@ from lxml import etree
 sys.path.insert(0, str(Path(__file__).parent))
 from audit_docx import (  # noqa: E402
     A4, FIRST_INDENT, FONT, LINE_15, MARGINS, NS, R, SIZE_HALFPT, W,
-    Audit, default_para_style_id, has_page_field, q, same_file,
+    Audit, default_para_style_id, document_part, has_page_field, q, same_file,
 )
 
 PPR_ORDER = [
@@ -100,18 +102,18 @@ def footer_xml():
     )
 
 
-def ensure_footer(doc, rels, parts, sect):
+def ensure_footer(doc, rels, parts, sect, footer_part=FOOTER_PART, footer_rel_id=FOOTER_REL_ID):
     """Возвращает True, если колонтитул пришлось добавить (нужны rels и Content_Types)."""
     refs = [r for r in sect.findall(q("footerReference")) if r.get(q("type")) in (None, "default")]
     if not refs:
         ref = etree.Element(q("footerReference"))
         ref.set(q("type"), "default")
-        ref.set(f"{{{R}}}id", FOOTER_REL_ID)
+        ref.set(f"{{{R}}}id", footer_rel_id)
         sect.insert(0, ref)
-        parts[FOOTER_PART] = etree.tostring(footer_xml(), xml_declaration=True, encoding="UTF-8", standalone=True)
+        parts[footer_part] = etree.tostring(footer_xml(), xml_declaration=True, encoding="UTF-8", standalone=True)
         return True
     target = rels.get(refs[0].get(f"{{{R}}}id"))
-    name = "word/" + target
+    name = document_part(target)
     footer = etree.fromstring(parts[name]) if name in parts else None
     if footer is None:
         raise SystemExit(f"Колонтитул {name} указан, но не найден в архиве")
@@ -133,15 +135,15 @@ def ensure_footer(doc, rels, parts, sect):
     return False
 
 
-def register_footer(rels_bytes, ct_bytes):
+def register_footer(rels_bytes, ct_bytes, footer_part=FOOTER_PART, footer_rel_id=FOOTER_REL_ID):
     rels = etree.fromstring(rels_bytes)
     rel = etree.SubElement(rels, "{http://schemas.openxmlformats.org/package/2006/relationships}Relationship")
-    rel.set("Id", FOOTER_REL_ID)
+    rel.set("Id", footer_rel_id)
     rel.set("Type", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer")
-    rel.set("Target", "footer_gost.xml")
+    rel.set("Target", footer_part.removeprefix("word/"))
     ct = etree.fromstring(ct_bytes)
     ov = etree.SubElement(ct, "{http://schemas.openxmlformats.org/package/2006/content-types}Override")
-    ov.set("PartName", "/" + FOOTER_PART)
+    ov.set("PartName", "/" + footer_part)
     ov.set("ContentType", "application/vnd.openxmlformats-officedocument.wordprocessingml.footer+xml")
     kw = dict(xml_declaration=True, encoding="UTF-8", standalone=True)
     return etree.tostring(rels, **kw), etree.tostring(ct, **kw)
@@ -313,10 +315,56 @@ def fix_citations(doc):
     return len(index), link_citations(doc, index)
 
 
-def main():
+def save_docx(path, parts, order):
+    """Write a complete archive before replacing the requested destination."""
+    destination = Path(path).resolve()
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=destination.parent, prefix=".gost-docx-", delete=False) as stream:
+            temporary = Path(stream.name)
+        with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as archive:
+            for name in order:
+                archive.writestr(name, parts[name])
+        os.replace(temporary, destination)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def prepare_footers(doc, rels, parts, sects):
+    """Preserve existing first/even footers and normalize each default footer."""
+    relationships = etree.fromstring(parts["word/_rels/document.xml.rels"])
+    used_ids = {r.get("Id") for r in relationships}
+    content_types = etree.fromstring(parts["[Content_Types].xml"])
+    used_parts = set(parts) | {o.get("PartName", "").lstrip("/") for o in content_types}
+    suffix = 0
+    while True:
+        tail = str(suffix) if suffix else ""
+        part, ident = f"word/footer_gost{tail}.xml", f"rIdGostFooter{tail}"
+        if part not in used_parts and ident not in used_ids:
+            break
+        suffix += 1
+    added = ensure_footer(doc, rels, parts, sects[0], part, ident)
+    if added:
+        parts["word/_rels/document.xml.rels"], parts["[Content_Types].xml"] = register_footer(
+            parts["word/_rels/document.xml.rels"], parts["[Content_Types].xml"], part, ident)
+        rels = {**rels, ident: part.removeprefix("word/")}
+    previous = next(r for r in sects[0].findall(q("footerReference")) if r.get(q("type")) in (None, "default"))
+    for sect in sects[1:]:
+        defaults = [r for r in sect.findall(q("footerReference")) if r.get(q("type")) in (None, "default")]
+        if not defaults:
+            sect.insert(0, copy.deepcopy(previous))
+        else:
+            ensure_footer(doc, rels, parts, sect)
+            previous = defaults[0]
+    return part if added else None
+
+
+def format_document():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("docx")
     ap.add_argument("--out", help="путь результата (по умолчанию файл_gost.docx рядом)")
+    ap.add_argument("--dry-run", action="store_true", help="показать изменяемые части без сохранения")
     args = ap.parse_args()
 
     src = Path(args.docx)
@@ -326,18 +374,16 @@ def main():
 
     audit = Audit(args.docx)
     parts = {n: audit.z.read(n) for n in audit.z.namelist()}
+    original_parts = parts.copy()
     order = audit.z.namelist()
+    audit.z.close()
 
     sects = list(audit.doc.iter(q("sectPr")))
     if not sects:
         raise SystemExit("В документе нет sectPr — не к чему применять поля страницы")
     for s in sects:
         fix_sect(s)
-    added_footer = ensure_footer(audit.doc, audit.rels, parts, sects[0])
-    first_ref = sects[0].find(q("footerReference"))
-    for s in sects[1:]:
-        if first_ref is not None and not s.findall(q("footerReference")):
-            s.insert(0, copy.deepcopy(first_ref))
+    added_footer = prepare_footers(audit.doc, audit.rels, parts, sects)
 
     parts["word/document.xml"] = etree.tostring(audit.doc, xml_declaration=True, encoding="UTF-8", standalone=True)
     if audit.styles is None:
@@ -356,18 +402,30 @@ def main():
         parts["word/settings.xml"] = etree.tostring(settings, xml_declaration=True, encoding="UTF-8", standalone=True)
 
     if added_footer:
-        parts["word/_rels/document.xml.rels"], parts["[Content_Types].xml"] = register_footer(
-            parts["word/_rels/document.xml.rels"], parts["[Content_Types].xml"])
-        order.append(FOOTER_PART)
+        order.append(added_footer)
 
-    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-        for name in order:
-            z.writestr(name, parts[name])
+    if args.dry_run:
+        changed = sorted(name for name, content in parts.items() if original_parts.get(name) != content)
+        print("Предварительная проверка завершена. Файл не записан.")
+        print(f"Частей DOCX с изменениями: {len(changed)}.")
+        for name in changed:
+            print(f"- {name}")
+        print(f"Абзацев обработано: {n_body}. Источников: {n_bib}. Новых ссылок: {n_links}.")
+        return 0
+    save_docx(out, parts, order)
     print(f"Готово: {out}. Абзацев основного текста оформлено: {n_body}.")
     print(f"Источников с закладками: {n_bib}. Ссылок [N] сделано кликабельными: {n_links}.")
     if added_footer:
         print("Колонтитул с номером страницы добавлен.")
     return 0
+
+
+def main():
+    try:
+        return format_document()
+    except (OSError, ValueError, KeyError, zipfile.BadZipFile, etree.XMLSyntaxError) as error:
+        print(f"Не удалось оформить DOCX: {error}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
