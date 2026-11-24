@@ -7,7 +7,9 @@
 import argparse
 import json
 import os
+import posixpath
 import tempfile
+from urllib.parse import unquote, urlsplit
 import re
 import sys
 import zipfile
@@ -68,6 +70,22 @@ def has_page_field(root):
     return False
 
 
+def document_part(target):
+    """Resolve a package relationship relative to word/document.xml."""
+    if not target:
+        raise ValueError("не задан путь связанной части DOCX")
+    parsed = urlsplit(target)
+    if parsed.scheme or parsed.netloc or parsed.query or parsed.fragment:
+        raise ValueError(f"неподдерживаемый путь части DOCX: {target}")
+    path = unquote(parsed.path)
+    if "\\" in path:
+        raise ValueError(f"некорректный путь части DOCX: {target}")
+    path = posixpath.normpath(path.lstrip("/") if path.startswith("/") else "word/" + path)
+    if path == ".." or path.startswith("../"):
+        raise ValueError(f"путь выходит за пределы DOCX: {target}")
+    return path
+
+
 def same_file(source: Path, destination: Path) -> bool:
     if source.resolve() == destination.resolve():
         return True
@@ -117,7 +135,7 @@ class Audit:
         rels = self._xml("word/_rels/document.xml.rels")
         if rels is None:
             return {}
-        return {r.get("Id"): r.get("Target") for r in rels}
+        return {r.get("Id"): r.get("Target") for r in rels if r.get("TargetMode") != "External"}
 
     def add(self, level, where, msg):
         self.findings.append((level, where, msg))
@@ -202,7 +220,7 @@ class Audit:
                      "для первой страницы нет отдельного колонтитула; проверьте, что номер на титуле скрыт визуально (ГОСТ 7.32, 6.3.2)")
             return
         target = self.rels.get(first_refs[0].get(f"{{{R}}}id"))
-        footer = self._xml("word/" + target) if target else None
+        footer = self._xml(document_part(target)) if target else None
         if footer is None:
             self.add("ошибка", where, "колонтитул первой страницы указан, но файл не найден")
         elif self._footer_has_page(footer):
@@ -214,7 +232,7 @@ class Audit:
             self.add("ошибка", where, "нет нижнего колонтитула с номером страницы (ГОСТ 7.32, 6.3.1)")
             return
         target = self.rels.get(refs[0].get(f"{{{R}}}id"))
-        footer = self._xml("word/" + target) if target else None
+        footer = self._xml(document_part(target)) if target else None
         if footer is None:
             self.add("ошибка", where, "колонтитул указан, но файл не найден")
             return
