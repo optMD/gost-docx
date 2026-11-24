@@ -9,7 +9,9 @@
 """
 import argparse
 import copy
+import os
 import re
+import tempfile
 import sys
 import zipfile
 from pathlib import Path
@@ -313,6 +315,22 @@ def fix_citations(doc):
     return len(index), link_citations(doc, index)
 
 
+def save_docx(path, parts, order):
+    """Write a complete archive before replacing the requested destination."""
+    destination = Path(path).resolve()
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=destination.parent, prefix=".gost-docx-", delete=False) as stream:
+            temporary = Path(stream.name)
+        with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED) as archive:
+            for name in order:
+                archive.writestr(name, parts[name])
+        os.replace(temporary, destination)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
 def format_document():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("docx")
@@ -327,6 +345,7 @@ def format_document():
     audit = Audit(args.docx)
     parts = {n: audit.z.read(n) for n in audit.z.namelist()}
     order = audit.z.namelist()
+    audit.z.close()
 
     sects = list(audit.doc.iter(q("sectPr")))
     if not sects:
@@ -360,9 +379,7 @@ def format_document():
             parts["word/_rels/document.xml.rels"], parts["[Content_Types].xml"])
         order.append(FOOTER_PART)
 
-    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as z:
-        for name in order:
-            z.writestr(name, parts[name])
+    save_docx(out, parts, order)
     print(f"Готово: {out}. Абзацев основного текста оформлено: {n_body}.")
     print(f"Источников с закладками: {n_bib}. Ссылок [N] сделано кликабельными: {n_links}.")
     if added_footer:
