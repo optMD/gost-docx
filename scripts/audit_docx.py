@@ -89,17 +89,29 @@ def default_para_style_id(styles):
 class Audit:
     def __init__(self, path):
         self.path = path
+        self.z = None
         try:
             self.z = zipfile.ZipFile(path)
-            self.doc = etree.fromstring(self.z.read("word/document.xml"))
-        except (OSError, zipfile.BadZipFile, KeyError, etree.XMLSyntaxError) as e:
+            self.doc = self._xml("word/document.xml")
+            if self.doc is None:
+                raise ValueError("нет word/document.xml")
+            if self.doc.tag != q("document") or self.doc.find(q("body")) is None:
+                raise ValueError("word/document.xml не содержит документ Word с body")
+            self.styles = self._xml("word/styles.xml")
+            self.rels = self._rels()
+        except (OSError, zipfile.BadZipFile, KeyError, ValueError, RuntimeError, etree.XMLSyntaxError) as e:
+            if self.z is not None:
+                self.z.close()
             raise SystemExit(f"Не удалось открыть docx: {e}")
-        self.styles = self._xml("word/styles.xml")
-        self.rels = self._rels()
         self.findings = []  # (уровень, место, текст)
 
     def _xml(self, name):
-        return etree.fromstring(self.z.read(name)) if name in self.z.namelist() else None
+        if name not in self.z.namelist():
+            return None
+        try:
+            return etree.fromstring(self.z.read(name), parser=etree.XMLParser(resolve_entities=False, no_network=True))
+        except (etree.XMLSyntaxError, zipfile.BadZipFile, RuntimeError) as error:
+            raise ValueError(f"{name}: {error}") from error
 
     def _rels(self):
         rels = self._xml("word/_rels/document.xml.rels")

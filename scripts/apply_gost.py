@@ -313,7 +313,7 @@ def fix_citations(doc):
     return len(index), link_citations(doc, index)
 
 
-def main():
+def format_document():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("docx")
     ap.add_argument("--out", help="путь результата (по умолчанию файл_gost.docx рядом)")
@@ -368,6 +368,14 @@ def main():
     if added_footer:
         print("Колонтитул с номером страницы добавлен.")
     return 0
+
+
+def main():
+    try:
+        return format_document()
+    except (OSError, ValueError, KeyError, zipfile.BadZipFile, etree.XMLSyntaxError) as error:
+        print(f"Не удалось оформить DOCX: {error}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
