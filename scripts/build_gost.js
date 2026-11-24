@@ -3,6 +3,7 @@
 // Usage: node build_gost.js assignment.json output.docx
 
 const fs = require("fs");
+const { atomicWrite } = require("./atomic_write");
 const { loadSpec, PROFILES } = require("./task_spec");
 const {
   Document, Packer, Paragraph, TextRun, Footer, AlignmentType, PageNumber,
@@ -162,7 +163,7 @@ async function main() {
     }
   }
   const buf = await Packer.toBuffer(build(spec));
-  fs.writeFileSync(outPath, buf);
+  atomicWrite(outPath, buf);
   console.log(`Created: ${outPath}`);
 }
 
