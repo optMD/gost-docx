@@ -346,7 +346,9 @@ class Audit:
     def check_main_section_breaks(self):
         """Main sections must start on a new page (ГОСТ 7.32, 6.2.1)."""
         for idx, p in self.body_paragraphs():
-            ppr, _, text = self.paragraph_info(p)
+            ppr, style, text = self.paragraph_info(p)
+            if style.lower().startswith("toc"):
+                continue
             title = text.strip()
             if not re.match(r"^\d+\s+\S", title):
                 continue

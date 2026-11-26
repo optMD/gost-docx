@@ -5,6 +5,8 @@ import shutil
 import subprocess
 import sys
 import unittest
+import zipfile
+from xml.etree import ElementTree as ET
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -52,3 +54,35 @@ class InstalledRuntimeTests(unittest.TestCase):
         self.assertTrue(json.loads(result.stdout)["ok"])
         result = self.run_cli("--version")
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_full_document_workflow_from_unrelated_directory(self):
+        task = self.work / "Задание с пробелами.json"
+        shutil.copy2(ROOT / "tests/fixtures/minimal_report.json", task)
+        built = self.work / "Исходный отчёт.docx"
+        formatted = self.work / "Оформленный отчёт.docx"
+        report = self.work / "Результат проверки.json"
+        for args in [("validate", task.name, "--strict", "--json"),
+                     ("build", task.name, built.name, "--strict")]:
+            result = self.run_cli(*args)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        original = built.read_bytes()
+        result = self.run_cli("format", built.name, "--out", formatted.name, "--dry-run")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(formatted.exists())
+        result = self.run_cli("format", built.name, "--out", formatted.name)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(built.read_bytes(), original)
+        result = self.run_cli("audit", formatted.name, "--json", "--out", report.name)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        data = json.loads(result.stdout)
+        self.assertTrue(data["completed"])
+        self.assertTrue(data["ok"])
+        self.assertEqual(data, json.loads(report.read_text(encoding="utf-8")))
+        with zipfile.ZipFile(built) as before, zipfile.ZipFile(formatted) as after:
+            namespace = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+            texts = []
+            for archive in (before, after):
+                self.assertIsNone(archive.testzip())
+                doc = ET.fromstring(archive.read("word/document.xml"))
+                texts.append("".join(t.text or "" for t in doc.iter(namespace + "t")))
+            self.assertEqual(texts[0], texts[1])

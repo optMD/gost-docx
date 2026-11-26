@@ -9,9 +9,21 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 import audit_docx
 import gost_docx
+from lxml import etree
 
 
 class AuditPolicyTests(unittest.TestCase):
+    def test_toc_entries_are_exempt_but_real_chapters_still_need_breaks(self):
+        audit = audit_docx.Audit.__new__(audit_docx.Audit)
+        audit.findings = []
+        audit.doc = etree.fromstring(f'<w:document xmlns:w="{audit_docx.W}"><w:body>'
+            '<w:p><w:pPr><w:pStyle w:val="TOC1"/></w:pPr><w:r><w:t>1 Chapter</w:t></w:r></w:p>'
+            '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>1 Chapter</w:t></w:r></w:p>'
+            '</w:body></w:document>')
+        audit.check_main_section_breaks()
+        self.assertEqual(len(audit.findings), 1)
+        self.assertEqual(audit.findings[0][1], "абз.1")
+
     def test_warning_policy_keeps_severity_and_controls_json_status(self):
         for findings in ([], [("предупреждение", "раздел", "Check visually")],
                          [("ошибка", "раздел", "Wrong margin")]):
