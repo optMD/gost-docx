@@ -67,7 +67,7 @@ class AuditTests(unittest.TestCase):
                 env={**os.environ, "NODE_PATH": str(ROOT / "scripts" / "node_modules")},
             )
             result = subprocess.run(
-                ["python3", str(AUDIT), str(output)],
+                [sys.executable, str(AUDIT), str(output)],
                 cwd=ROOT,
                 text=True,
                 capture_output=True,

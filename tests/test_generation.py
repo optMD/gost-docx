@@ -64,8 +64,15 @@ class GenerationTests(unittest.TestCase):
             hardlink = Path(tmp) / "hard.docx"
             os.link(task, hardlink)
             symlink = Path(tmp) / "symbolic.docx"
-            symlink.symlink_to(task)
-            for output in (task, hardlink, symlink):
+            outputs = [task, hardlink]
+            try:
+                symlink.symlink_to(task)
+            except OSError:
+                if os.name != "nt":
+                    raise
+            else:
+                outputs.append(symlink)
+            for output in outputs:
                 with self.subTest(output=output):
                     result = subprocess.run([sys.executable, str(CLI), "build", str(task), str(output)],
                                             capture_output=True, text=True)
