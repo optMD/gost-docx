@@ -11,6 +11,20 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class SkillPackageTests(unittest.TestCase):
+    def test_runtime_metadata_matches_cli_and_lockfile(self):
+        package = json.loads((ROOT / "scripts/package.json").read_text())
+        lock = json.loads((ROOT / "scripts/package-lock.json").read_text())
+        version = subprocess.run([sys.executable, str(ROOT / "scripts/gost_docx.py"), "--version"],
+                                 capture_output=True, text=True, check=True).stdout.strip().split()[-1]
+        self.assertEqual(package["version"], version)
+        self.assertEqual(lock["version"], version)
+        self.assertEqual(lock["packages"][""]["version"], version)
+        self.assertEqual(package["name"], lock["name"])
+        self.assertEqual(package["name"], lock["packages"][""]["name"])
+        self.assertEqual(package["license"], lock["packages"][""]["license"])
+        self.assertEqual(package["dependencies"], lock["packages"][""]["dependencies"])
+        self.assertTrue(package["private"])
+
     def test_subcommand_help_and_argument_errors_need_no_dependencies(self):
         runner = [sys.executable, "-I", "-S", str(ROOT / "scripts/gost_docx.py")]
         for command, expected in [("audit", "--out"), ("format", "--out"), ("build", "output")]:
